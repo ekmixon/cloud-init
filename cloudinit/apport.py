@@ -96,8 +96,7 @@ def attach_cloud_info(report, ui=None):
                 "Please select the cloud vendor or environment in which"
                 " this instance is running"
             )
-            response = ui.choice(prompt, KNOWN_CLOUD_NAMES)
-            if response:
+            if response := ui.choice(prompt, KNOWN_CLOUD_NAMES):
                 report["CloudName"] = KNOWN_CLOUD_NAMES[response[0]]
             else:
                 report["CloudName"] = "None"

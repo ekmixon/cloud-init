@@ -97,26 +97,23 @@ class UeventHandler(abc.ABC):
         elif self.action == "remove":
             detect_presence = False
         else:
-            raise ValueError("Unknown action: %s" % self.action)
+            raise ValueError(f"Unknown action: {self.action}")
 
         if detect_presence != self.device_detected():
-            raise RuntimeError(
-                "Failed to detect %s in updated metadata" % self.id
-            )
+            raise RuntimeError(f"Failed to detect {self.id} in updated metadata")
 
     def success(self):
         return self.success_fn()
 
     def update_metadata(self):
-        result = self.datasource.update_metadata_if_supported(
+        if result := self.datasource.update_metadata_if_supported(
             [EventType.HOTPLUG]
-        )
-        if not result:
+        ):
+            return result
+        else:
             raise RuntimeError(
-                "Datasource %s not updated for event %s"
-                % (self.datasource, EventType.HOTPLUG)
+                f"Datasource {self.datasource} not updated for event {EventType.HOTPLUG}"
             )
-        return result
 
 
 class NetHandler(UeventHandler):
@@ -134,14 +131,10 @@ class NetHandler(UeventHandler):
         activator = activators.select_activator()
         if self.action == "add":
             if not activator.bring_up_interface(interface_name):
-                raise RuntimeError(
-                    "Failed to bring up device: {}".format(self.devpath)
-                )
+                raise RuntimeError(f"Failed to bring up device: {self.devpath}")
         elif self.action == "remove":
             if not activator.bring_down_interface(interface_name):
-                raise RuntimeError(
-                    "Failed to bring down device: {}".format(self.devpath)
-                )
+                raise RuntimeError(f"Failed to bring down device: {self.devpath}")
 
     @property
     def config(self):
@@ -168,10 +161,9 @@ def is_enabled(hotplug_init, subsystem):
         scope = SUBSYSTEM_PROPERTES_MAP[subsystem][1]
     except KeyError as e:
         raise Exception(
-            "hotplug-hook: cannot handle events for subsystem: {}".format(
-                subsystem
-            )
+            f"hotplug-hook: cannot handle events for subsystem: {subsystem}"
         ) from e
+
 
     return stages.update_event_enabled(
         datasource=hotplug_init.datasource,

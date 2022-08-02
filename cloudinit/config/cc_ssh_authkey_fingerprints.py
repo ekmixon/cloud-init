@@ -34,10 +34,7 @@ from cloudinit.simpletable import SimpleTable
 
 
 def _split_hash(bin_hash):
-    split_up = []
-    for i in range(0, len(bin_hash), 2):
-        split_up.append(bin_hash[i : i + 2])
-    return split_up
+    return [bin_hash[i : i + 2] for i in range(0, len(bin_hash), 2)]
 
 
 def _gen_fingerprint(b64_text, hash_meth="sha256"):
@@ -56,13 +53,13 @@ def _gen_fingerprint(b64_text, hash_meth="sha256"):
 
 
 def _is_printable_key(entry):
-    if any([entry.keytype, entry.base64, entry.comment, entry.options]):
-        if (
+    return bool(
+        any([entry.keytype, entry.base64, entry.comment, entry.options])
+        and (
             entry.keytype
             and entry.keytype.lower().strip() in ssh_util.VALID_KEY_TYPES
-        ):
-            return True
-    return False
+        )
+    )
 
 
 def _pprint_key_entries(
@@ -75,12 +72,7 @@ def _pprint_key_entries(
         )
         util.multi_log(message, console=True, stderr=False)
         return
-    tbl_fields = [
-        "Keytype",
-        "Fingerprint (%s)" % (hash_meth),
-        "Options",
-        "Comment",
-    ]
+    tbl_fields = ["Keytype", f"Fingerprint ({hash_meth})", "Options", "Comment"]
     tbl = SimpleTable(tbl_fields)
     for entry in key_entries:
         if _is_printable_key(entry):
@@ -96,11 +88,10 @@ def _pprint_key_entries(
     max_len = len(max(authtbl_lines, key=len))
     lines = [
         util.center(
-            "Authorized keys from %s for user %s" % (key_fn, user),
-            "+",
-            max_len,
-        ),
+            f"Authorized keys from {key_fn} for user {user}", "+", max_len
+        )
     ]
+
     lines.extend(authtbl_lines)
     for line in lines:
         util.multi_log(

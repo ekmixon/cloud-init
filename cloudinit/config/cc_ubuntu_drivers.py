@@ -132,14 +132,15 @@ def install_drivers(cfg, pkg_install_func):
     driver_arg = "nvidia"
     version_cfg = util.get_cfg_by_path(cfg, "nvidia/version")
     if version_cfg:
-        driver_arg += ":{}".format(version_cfg)
+        driver_arg += f":{version_cfg}"
 
     LOG.debug(
         "Installing and activating NVIDIA drivers (%s=%s, version=%s)",
         cfgpath,
         nv_acc,
-        version_cfg if version_cfg else "latest",
+        version_cfg or "latest",
     )
+
 
     # Register and set debconf selection linux/nvidia/latelink = true
     tdir = temp_utils.mkdtemp(needs_exe=True)

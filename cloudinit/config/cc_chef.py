@@ -8,6 +8,7 @@
 
 """Chef: module that configures, starts and installs chef."""
 
+
 import itertools
 import json
 import os
@@ -19,21 +20,16 @@ from cloudinit.settings import PER_ALWAYS
 
 RUBY_VERSION_DEFAULT = "1.8"
 
-CHEF_DIRS = tuple(
-    [
-        "/etc/chef",
-        "/var/log/chef",
-        "/var/lib/chef",
-        "/var/cache/chef",
-        "/var/backups/chef",
-        "/var/run/chef",
-    ]
+CHEF_DIRS = (
+    "/etc/chef",
+    "/var/log/chef",
+    "/var/lib/chef",
+    "/var/cache/chef",
+    "/var/backups/chef",
+    "/var/run/chef",
 )
-REQUIRED_CHEF_DIRS = tuple(
-    [
-        "/etc/chef",
-    ]
-)
+
+REQUIRED_CHEF_DIRS = ("/etc/chef", )
 
 # Used if fetching chef from a omnibus style package
 OMNIBUS_URL = "https://www.chef.io/chef/install.sh"
@@ -86,7 +82,7 @@ CHEF_RB_TPL_KEYS.extend(
 CHEF_RB_TPL_KEYS = frozenset(CHEF_RB_TPL_KEYS)
 CHEF_RB_PATH = "/etc/chef/client.rb"
 CHEF_EXEC_PATH = "/usr/bin/chef-client"
-CHEF_EXEC_DEF_ARGS = tuple(["-d", "-i", "1800", "-s", "20"])
+CHEF_EXEC_DEF_ARGS = "-d", "-i", "1800", "-s", "20"
 
 
 frequency = PER_ALWAYS
@@ -159,12 +155,10 @@ def get_template_params(iid, chef_cfg, log):
             continue
         if v is None:
             params[k] = None
+        elif k in CHEF_RB_TPL_BOOL_KEYS:
+            params[k] = util.get_cfg_option_bool(chef_cfg, k)
         else:
-            # This will make the value a boolean or string...
-            if k in CHEF_RB_TPL_BOOL_KEYS:
-                params[k] = util.get_cfg_option_bool(chef_cfg, k)
-            else:
-                params[k] = util.get_cfg_option_str(chef_cfg, k)
+            params[k] = util.get_cfg_option_str(chef_cfg, k)
     # These ones are overwritten to be exact values...
     params.update(
         {
@@ -203,10 +197,7 @@ def handle(name, cfg, cloud, log, _args):
         util.ensure_dir(d)
 
     vkey_path = chef_cfg.get("validation_key", CHEF_VALIDATION_PEM_PATH)
-    vcert = chef_cfg.get("validation_cert")
-    # special value 'system' means do not overwrite the file
-    # but still render the template to contain 'validation_key'
-    if vcert:
+    if vcert := chef_cfg.get("validation_cert"):
         if vcert != "system":
             util.write_file(vkey_path, vcert)
         elif not os.path.isfile(vkey_path):
@@ -216,30 +207,26 @@ def handle(name, cfg, cloud, log, _args):
                 vkey_path,
             )
 
-    # Create the chef config from template
-    template_fn = cloud.get_template_filename("chef_client.rb")
-    if template_fn:
+    if template_fn := cloud.get_template_filename("chef_client.rb"):
         iid = str(cloud.datasource.get_instance_id())
         params = get_template_params(iid, chef_cfg, log)
         # Do a best effort attempt to ensure that the template values that
         # are associated with paths have their parent directory created
         # before they are used by the chef-client itself.
-        param_paths = set()
-        for (k, v) in params.items():
-            if k in CHEF_RB_TPL_PATH_KEYS and v:
-                param_paths.add(os.path.dirname(v))
+        param_paths = {
+            os.path.dirname(v)
+            for k, v in params.items()
+            if k in CHEF_RB_TPL_PATH_KEYS and v
+        }
+
         util.ensure_dirs(param_paths)
         templater.render_to_file(template_fn, CHEF_RB_PATH, params)
     else:
         log.warning("No template found, not rendering to %s", CHEF_RB_PATH)
 
-    # Set the firstboot json
-    fb_filename = util.get_cfg_option_str(
+    if fb_filename := util.get_cfg_option_str(
         chef_cfg, "firstboot_path", default=CHEF_FB_PATH
-    )
-    if not fb_filename:
-        log.info("First boot path empty, not writing first boot json file")
-    else:
+    ):
         initial_json = {}
         if "run_list" in chef_cfg:
             initial_json["run_list"] = chef_cfg["run_list"]
@@ -249,6 +236,8 @@ def handle(name, cfg, cloud, log, _args):
                 initial_json[k] = initial_attributes[k]
         util.write_file(fb_filename, json.dumps(initial_json))
 
+    else:
+        log.info("First boot path empty, not writing first boot json file")
     # Try to install chef, if its not already installed...
     force_install = util.get_cfg_option_bool(
         chef_cfg, "force_install", default=False
@@ -256,10 +245,8 @@ def handle(name, cfg, cloud, log, _args):
     installed = subp.is_exe(CHEF_EXEC_PATH)
     if not installed or force_install:
         run = install_chef(cloud, chef_cfg, log)
-    elif installed:
-        run = util.get_cfg_option_bool(chef_cfg, "exec", default=False)
     else:
-        run = False
+        run = util.get_cfg_option_bool(chef_cfg, "exec", default=False)
     if run:
         run_chef(chef_cfg, log)
         post_run_chef(chef_cfg, log)
@@ -296,7 +283,7 @@ def subp_blob_in_tempfile(blob, *args, **kwargs):
     """
     basename = kwargs.pop("basename", "subp_blob")
 
-    if len(args) == 0 and "args" not in kwargs:
+    if not args and "args" not in kwargs:
         args = [tuple()]
 
     # Use tmpdir over tmpfile to avoid 'text file busy' on execute
@@ -327,10 +314,7 @@ def install_chef_from_omnibus(url=None, retries=None, omnibus_version=None):
     if retries is None:
         retries = OMNIBUS_URL_RETRIES
 
-    if omnibus_version is None:
-        args = []
-    else:
-        args = ["-v", omnibus_version]
+    args = [] if omnibus_version is None else ["-v", omnibus_version]
     content = url_helper.readurl(url=url, retries=retries).contents
     return subp_blob_in_tempfile(
         blob=content, args=args, basename="chef-omnibus-install", capture=False
@@ -371,7 +355,7 @@ def install_chef(cloud, chef_cfg, log):
 
 def get_ruby_packages(version):
     # return a list of packages needed to install ruby at version
-    pkgs = ["ruby%s" % version, "ruby%s-dev" % version]
+    pkgs = [f"ruby{version}", f"ruby{version}-dev"]
     if version == "1.8":
         pkgs.extend(("libopenssl-ruby1.8", "rubygems1.8"))
     return pkgs
@@ -380,16 +364,16 @@ def get_ruby_packages(version):
 def install_chef_from_gems(ruby_version, chef_version, distro):
     distro.install_packages(get_ruby_packages(ruby_version))
     if not os.path.exists("/usr/bin/gem"):
-        util.sym_link("/usr/bin/gem%s" % ruby_version, "/usr/bin/gem")
+        util.sym_link(f"/usr/bin/gem{ruby_version}", "/usr/bin/gem")
     if not os.path.exists("/usr/bin/ruby"):
-        util.sym_link("/usr/bin/ruby%s" % ruby_version, "/usr/bin/ruby")
+        util.sym_link(f"/usr/bin/ruby{ruby_version}", "/usr/bin/ruby")
     if chef_version:
         subp.subp(
             [
                 "/usr/bin/gem",
                 "install",
                 "chef",
-                "-v %s" % chef_version,
+                f"-v {chef_version}",
                 "--no-ri",
                 "--no-rdoc",
                 "--bindir",
@@ -398,6 +382,7 @@ def install_chef_from_gems(ruby_version, chef_version, distro):
             ],
             capture=False,
         )
+
     else:
         subp.subp(
             [

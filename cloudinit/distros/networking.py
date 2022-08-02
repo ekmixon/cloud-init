@@ -150,7 +150,7 @@ class Networking(metaclass=abc.ABCMeta):
         # the current macs present; we only check MAC as cloud-init
         # has not yet renamed interfaces and the netcfg may include
         # such renames.
-        for _ in range(0, 5):
+        for _ in range(5):
             if expected_macs.issubset(present_macs):
                 LOG.debug("net: all expected physical devices present")
                 return
@@ -160,7 +160,7 @@ class Networking(metaclass=abc.ABCMeta):
             for mac in missing:
                 # trigger a settle, unless this interface exists
                 devname = expected_ifaces[mac]
-                msg = "Waiting for settle or {} exists".format(devname)
+                msg = f"Waiting for settle or {devname} exists"
                 util.log_time(
                     LOG.debug,
                     msg,
@@ -171,7 +171,7 @@ class Networking(metaclass=abc.ABCMeta):
             # update present_macs after settles
             present_macs = self.get_interfaces_by_mac().keys()
 
-        msg = "Not all expected physical devices present: %s" % missing
+        msg = f"Not all expected physical devices present: {missing}"
         LOG.warning(msg)
         if strict:
             raise RuntimeError(msg)

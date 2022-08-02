@@ -66,22 +66,21 @@ def read_file_or_url(url, **kwargs):
     """
     url = url.lstrip()
     if url.startswith("/"):
-        url = "file://%s" % url
-    if url.lower().startswith("file://"):
-        if kwargs.get("data"):
-            LOG.warning("Unable to post data to file resource %s", url)
-        file_path = url[len("file://") :]
-        try:
-            with open(file_path, "rb") as fp:
-                contents = fp.read()
-        except IOError as e:
-            code = e.errno
-            if e.errno == ENOENT:
-                code = NOT_FOUND
-            raise UrlError(cause=e, code=code, headers=None, url=url) from e
-        return FileResponse(file_path, contents=contents)
-    else:
+        url = f"file://{url}"
+    if not url.lower().startswith("file://"):
         return readurl(url, **kwargs)
+    if kwargs.get("data"):
+        LOG.warning("Unable to post data to file resource %s", url)
+    file_path = url[len("file://") :]
+    try:
+        with open(file_path, "rb") as fp:
+            contents = fp.read()
+    except IOError as e:
+        code = e.errno
+        if e.errno == ENOENT:
+            code = NOT_FOUND
+        raise UrlError(cause=e, code=code, headers=None, url=url) from e
+    return FileResponse(file_path, contents=contents)
 
 
 # Made to have same accessors as UrlResponse so that the
@@ -95,9 +94,7 @@ class StringResponse(object):
         self.url = None
 
     def ok(self, *args, **kwargs):
-        if self.code != 200:
-            return False
-        return True
+        return self.code == 200
 
     def __str__(self):
         return self.contents.decode("utf-8")
@@ -122,13 +119,8 @@ class UrlResponse(object):
         return self._response.url
 
     def ok(self, redirects_ok=False):
-        upper = 300
-        if redirects_ok:
-            upper = 400
-        if 200 <= self.code < upper:
-            return True
-        else:
-            return False
+        upper = 400 if redirects_ok else 300
+        return 200 <= self.code < upper
 
     @property
     def headers(self):
@@ -240,9 +232,7 @@ def readurl(
     if retries:
         manual_tries = max(int(retries) + 1, 1)
 
-    def_headers = {
-        "User-Agent": "Cloud-Init/%s" % (version.version_string()),
-    }
+    def_headers = {"User-Agent": f"Cloud-Init/{version.version_string()}"}
     if headers:
         def_headers.update(headers)
     headers = def_headers
@@ -262,7 +252,7 @@ def readurl(
     # Handle retrying ourselves since the built-in support
     # doesn't handle sleeping between tries...
     # Infinitely retry if infinite is True
-    for i in count() if infinite else range(0, manual_tries):
+    for i in count() if infinite else range(manual_tries):
         req_args["headers"] = headers_cb(url)
         filtered_req_args = {}
         for (k, v) in req_args.items():
@@ -430,11 +420,7 @@ def wait_for_url(
             reason = ""
             url_exc = None
             try:
-                if headers_cb is not None:
-                    headers = headers_cb(url)
-                else:
-                    headers = {}
-
+                headers = headers_cb(url) if headers_cb is not None else {}
                 response = readurl(
                     url,
                     headers=headers,
@@ -444,7 +430,7 @@ def wait_for_url(
                     request_method=request_method,
                 )
                 if not response.contents:
-                    reason = "empty response [%s]" % (response.code)
+                    reason = f"empty response [{response.code}]"
                     url_exc = UrlError(
                         ValueError(reason),
                         code=response.code,
@@ -452,7 +438,7 @@ def wait_for_url(
                         url=url,
                     )
                 elif not response.ok():
-                    reason = "bad status code [%s]" % (response.code)
+                    reason = f"bad status code [{response.code}]"
                     url_exc = UrlError(
                         ValueError(reason),
                         code=response.code,
@@ -462,14 +448,14 @@ def wait_for_url(
                 else:
                     return url, response.contents
             except UrlError as e:
-                reason = "request error [%s]" % e
+                reason = f"request error [{e}]"
                 url_exc = e
             except Exception as e:
-                reason = "unexpected error [%s]" % e
+                reason = f"unexpected error [{e}]"
                 url_exc = e
 
             time_taken = int(time.time() - start_time)
-            max_wait_str = "%ss" % max_wait if max_wait else "unlimited"
+            max_wait_str = f"{max_wait}s" if max_wait else "unlimited"
             status_msg = "Calling '%s' failed [%s/%s]: %s" % (
                 url,
                 time_taken,
@@ -541,10 +527,7 @@ class OauthUrlHelper(object):
             fp.write(json.dumps(cur))
 
     def exception_cb(self, msg, exception):
-        if not (
-            isinstance(exception, UrlError)
-            and (exception.code == 403 or exception.code == 401)
-        ):
+        if not (isinstance(exception, UrlError) and exception.code in [403, 401]):
             return
 
         if "date" not in exception.headers:
@@ -611,9 +594,7 @@ class OauthUrlHelper(object):
         return ret
 
     def _headers_cb(self, extra_headers_cb, url):
-        headers = {}
-        if extra_headers_cb:
-            headers = extra_headers_cb(url)
+        headers = extra_headers_cb(url) if extra_headers_cb else {}
         headers.update(self.headers_cb(url))
         return headers
 
@@ -626,11 +607,7 @@ def oauth_headers(
     except ImportError as e:
         raise NotImplementedError("oauth support is not available") from e
 
-    if timestamp:
-        timestamp = str(timestamp)
-    else:
-        timestamp = None
-
+    timestamp = str(timestamp) if timestamp else None
     client = oauth1.Client(
         consumer_key,
         client_secret=consumer_secret,
@@ -658,9 +635,7 @@ def retry_on_url_exc(
         return False
     if exc.code in retry_codes:
         return True
-    if exc.cause and isinstance(exc.cause, retry_instances):
-        return True
-    return False
+    return bool(exc.cause and isinstance(exc.cause, retry_instances))
 
 
 # vi: ts=4 expandtab

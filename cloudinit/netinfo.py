@@ -58,10 +58,11 @@ def _netdev_info_iproute_json(ipaddr_json):
         address = dev["address"] if dev.get("link_type") == "ether" else ""
         dev_info = {
             "hwaddr": address,
-            "up": bool("UP" in flags and "LOWER_UP" in flags),
+            "up": "UP" in flags and "LOWER_UP" in flags,
             "ipv4": [],
             "ipv6": [],
         }
+
         for addr in dev.get("addr_info", []):
             if addr.get("family") == "inet":
                 mask = (
@@ -108,16 +109,18 @@ def _netdev_info_iproute(ipaddr_out):
     devs = {}
     dev_name = None
     for num, line in enumerate(ipaddr_out.splitlines()):
-        m = re.match(r"^\d+:\s(?P<dev>[^:]+):\s+<(?P<flags>\S+)>\s+.*", line)
-        if m:
-            dev_name = m.group("dev").lower().split("@")[0]
-            flags = m.group("flags").split(",")
+        if m := re.match(
+            r"^\d+:\s(?P<dev>[^:]+):\s+<(?P<flags>\S+)>\s+.*", line
+        ):
+            dev_name = m["dev"].lower().split("@")[0]
+            flags = m["flags"].split(",")
             devs[dev_name] = {
                 "ipv4": [],
                 "ipv6": [],
                 "hwaddr": "",
-                "up": bool("UP" in flags and "LOWER_UP" in flags),
+                "up": "UP" in flags and "LOWER_UP" in flags,
             }
+
         elif "inet6" in line:
             m = re.match(
                 r"\s+inet6\s(?P<ip>\S+)"
@@ -152,11 +155,12 @@ def _netdev_info_iproute(ipaddr_out):
             devs[dev_name]["ipv4"].append(
                 {
                     "ip": addr,
-                    "bcast": match["bcast"] if match["bcast"] else "",
+                    "bcast": match["bcast"] or "",
                     "mask": net_prefix_to_ipv4_mask(prefix),
                     "scope": match["scope"],
                 }
             )
+
         elif "link" in line:
             m = re.match(
                 r"\s+link/(?P<link_type>\S+)\s(?P<hwaddr>\S+).*", line
@@ -166,10 +170,7 @@ def _netdev_info_iproute(ipaddr_out):
                     "Could not parse ip addr show: (line:%d) %s", num, line
                 )
                 continue
-            if m.group("link_type") == "ether":
-                devs[dev_name]["hwaddr"] = m.group("hwaddr")
-            else:
-                devs[dev_name]["hwaddr"] = ""
+            devs[dev_name]["hwaddr"] = m["hwaddr"] if m["link_type"] == "ether" else ""
         else:
             continue
     return devs
@@ -189,9 +190,8 @@ def _netdev_info_ifconfig_netbsd(ifconfig_data):
             if curdev not in devs:
                 devs[curdev] = deepcopy(DEFAULT_NETDEV_INFO)
         toks = line.lower().strip().split()
-        if len(toks) > 1:
-            if re.search(r"flags=[x\d]+<up.*>", toks[1]):
-                devs[curdev]["up"] = True
+        if len(toks) > 1 and re.search(r"flags=[x\d]+<up.*>", toks[1]):
+            devs[curdev]["up"] = True
 
         for i in range(len(toks)):
             if toks[i] == "inet":  # Create new ipv4 addr entry
@@ -214,9 +214,8 @@ def _netdev_info_ifconfig_netbsd(ifconfig_data):
             elif toks[i].startswith("scope:"):
                 devs[curdev]["ipv6"][-1]["scope6"] = toks[i].lstrip("scope:")
             elif toks[i] == "scopeid":
-                res = re.match(r".*<(\S+)>", toks[i + 1])
-                if res:
-                    devs[curdev]["ipv6"][-1]["scope6"] = res.group(1)
+                if res := re.match(r".*<(\S+)>", toks[i + 1]):
+                    devs[curdev]["ipv6"][-1]["scope6"] = res[1]
                 else:
                     devs[curdev]["ipv6"][-1]["scope6"] = toks[i + 1]
 
@@ -258,7 +257,7 @@ def _netdev_info_ifconfig(ifconfig_data):
                 devs[curdev]["ipv4"][-1]["mask"] = toks[i].lstrip("mask:")
             elif toks[i] == "netmask":
                 devs[curdev]["ipv4"][-1]["mask"] = toks[i + 1]
-            elif toks[i] == "hwaddr" or toks[i] == "ether":
+            elif toks[i] in ["hwaddr", "ether"]:
                 devs[curdev]["hwaddr"] = toks[i + 1]
             elif toks[i] == "inet6":
                 if toks[i + 1] == "addr:":
@@ -271,9 +270,8 @@ def _netdev_info_ifconfig(ifconfig_data):
             elif toks[i].startswith("scope:"):
                 devs[curdev]["ipv6"][-1]["scope6"] = toks[i].lstrip("scope:")
             elif toks[i] == "scopeid":
-                res = re.match(r".*<(\S+)>", toks[i + 1])
-                if res:
-                    devs[curdev]["ipv6"][-1]["scope6"] = res.group(1)
+                if res := re.match(r".*<(\S+)>", toks[i + 1]):
+                    devs[curdev]["ipv6"][-1]["scope6"] = res[1]
                 else:
                     devs[curdev]["ipv6"][-1]["scope6"] = toks[i + 1]
 
@@ -339,9 +337,7 @@ def _netdev_route_info_iproute(iproute_data):
               gateway, flags, genmask and interface information.
     """
 
-    routes = {}
-    routes["ipv4"] = []
-    routes["ipv6"] = []
+    routes = {"ipv4": [], "ipv6": []}
     entries = iproute_data.splitlines()
     default_route_entry = {
         "destination": "",
@@ -411,16 +407,13 @@ def _netdev_route_info_iproute(iproute_data):
                 if toks[i] == "metric":
                     entry["metric"] = toks[i + 1]
                 if toks[i] == "expires":
-                    entry["flags"] = entry["flags"] + "e"
+                    entry["flags"] += "e"
             routes["ipv6"].append(entry)
     return routes
 
 
 def _netdev_route_info_netstat(route_data):
-    routes = {}
-    routes["ipv4"] = []
-    routes["ipv6"] = []
-
+    routes = {"ipv4": [], "ipv6": []}
     entries = route_data.splitlines()
     for line in entries:
         if not line:
@@ -582,7 +575,7 @@ def route_pformat():
                 "Route info failed ({error})".format(error=str(e)), "!", 80
             )
         )
-        util.logexc(LOG, "Route info failed: %s" % e)
+        util.logexc(LOG, f"Route info failed: {e}")
     else:
         if routes.get("ipv4"):
             fields_v4 = [
@@ -643,14 +636,12 @@ def debug_info(prefix="ci-info: "):
     lines = []
     netdev_lines = netdev_pformat().splitlines()
     if prefix:
-        for line in netdev_lines:
-            lines.append("%s%s" % (prefix, line))
+        lines.extend(f"{prefix}{line}" for line in netdev_lines)
     else:
         lines.extend(netdev_lines)
     route_lines = route_pformat().splitlines()
     if prefix:
-        for line in route_lines:
-            lines.append("%s%s" % (prefix, line))
+        lines.extend(f"{prefix}{line}" for line in route_lines)
     else:
         lines.extend(route_lines)
     return "\n".join(lines)

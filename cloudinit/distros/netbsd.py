@@ -82,7 +82,7 @@ class NetBSD(cloudinit.distros.bsd.BSD):
             raise
         # Set the password if it is provided
         # For security consideration, only hashed passwd is assumed
-        passwd_val = kwargs.get("passwd", None)
+        passwd_val = kwargs.get("passwd")
         if passwd_val is not None:
             self.set_passwd(name, passwd_val, hashed=True)
 
@@ -143,10 +143,8 @@ class NetBSD(cloudinit.distros.bsd.BSD):
         e = os.environ.copy()
         e[
             "PKG_PATH"
-        ] = "http://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/%s/%s/All" % (
-            os_arch,
-            os_release,
-        )
+        ] = f"http://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/{os_arch}/{os_release}/All"
+
         return e
 
     def update_package_sources(self):

@@ -63,22 +63,17 @@ def handle(name, cfg, _cloud, log, _args):
                     "Registration failed or did not run completely"
                 )
 
-            # Splitting up the registration, auto-attach, and servicelevel
-            # commands because the error codes, messages from subman are not
-            # specific enough.
+            if sm.auto_attach:
+                if sm.servicelevel is None:
+                    if sm._set_auto_attach():
+                        sm.log.debug("Completed auto-attach")
 
-            # Attempt to change the service level
-            if sm.auto_attach and sm.servicelevel is not None:
-                if not sm._set_service_level():
-                    raise SubscriptionError("Setting of service-level failed")
-                else:
+                    else:
+                        raise SubscriptionError("Setting auto-attach failed")
+                elif sm._set_service_level():
                     sm.log.debug("Completed auto-attach with service level")
-            elif sm.auto_attach:
-                if not sm._set_auto_attach():
-                    raise SubscriptionError("Setting auto-attach failed")
                 else:
-                    sm.log.debug("Completed auto-attach")
-
+                    raise SubscriptionError("Setting of service-level failed")
             if sm.pools is not None:
                 if not isinstance(sm.pools, list):
                     pool_fail = "Pools must in the format of a list"
@@ -89,10 +84,10 @@ def handle(name, cfg, _cloud, log, _args):
                     raise SubscriptionError(
                         "Unable to attach pools {0}".format(sm.pools)
                     )
-            return_stat = sm.update_repos()
-            if not return_stat:
+            if return_stat := sm.update_repos():
+                sm.log_success("rh_subscription plugin completed successfully")
+            else:
                 raise SubscriptionError("Unable to add or remove repos")
-            sm.log_success("rh_subscription plugin completed successfully")
         except SubscriptionError as e:
             sm.log_warn(str(e))
             sm.log_warn("rh_subscription plugin did not complete successfully")
@@ -332,18 +327,21 @@ class SubscriptionManager(object):
 
         cmd = ["repos", "--list-enabled"]
         return_out = _sub_man_cli(cmd)[0]
-        active_repos = []
-        for repo in return_out.split("\n"):
-            if "Repo ID:" in repo:
-                active_repos.append((repo.split(":")[1]).strip())
+        active_repos = [
+            (repo.split(":")[1]).strip()
+            for repo in return_out.split("\n")
+            if "Repo ID:" in repo
+        ]
 
         cmd = ["repos", "--list-disabled"]
         return_out = _sub_man_cli(cmd)[0]
 
-        inactive_repos = []
-        for repo in return_out.split("\n"):
-            if "Repo ID:" in repo:
-                inactive_repos.append((repo.split(":")[1]).strip())
+        inactive_repos = [
+            (repo.split(":")[1]).strip()
+            for repo in return_out.split("\n")
+            if "Repo ID:" in repo
+        ]
+
         return active_repos, inactive_repos
 
     def addPool(self, pools):
@@ -359,14 +357,13 @@ class SubscriptionManager(object):
 
         pool_available, pool_consumed = self._getPools()
         pool_list = []
-        cmd = ["attach"]
         for pool in pools:
             if (pool not in pool_consumed) and (pool in pool_available):
                 pool_list.append("--pool={0}".format(pool))
             else:
                 self.log_warn("Pool {0} is not available".format(pool))
-        if len(pool_list) > 0:
-            cmd.extend(pool_list)
+        if pool_list:
+            cmd = ["attach", *pool_list]
             try:
                 _sub_man_cli(cmd)
                 self.log.debug(
@@ -426,7 +423,7 @@ class SubscriptionManager(object):
                 disable_list_fail.append(repoid)
 
         # Logging any repos that are already enabled or disabled
-        if len(enable_list_fail) > 0:
+        if enable_list_fail:
             for fail in enable_list_fail:
                 # Check if the repo exists or not
                 if fail in active_repos:
@@ -435,17 +432,17 @@ class SubscriptionManager(object):
                     self.log_warn(
                         "Repo {0} does not appear to exist".format(fail)
                     )
-        if len(disable_list_fail) > 0:
+        if disable_list_fail:
             for fail in disable_list_fail:
                 self.log.debug(
                     "Repo %s not disabled because it is not enabled", fail
                 )
 
         cmd = ["repos"]
-        if len(disable_list) > 0:
+        if disable_list:
             cmd.extend(disable_list)
 
-        if len(enable_list) > 0:
+        if enable_list:
             cmd.extend(enable_list)
 
         try:
@@ -454,12 +451,12 @@ class SubscriptionManager(object):
             self.log_warn("Unable to alter repos due to {0}".format(e))
             return False
 
-        if len(enable_list) > 0:
+        if enable_list:
             self.log.debug(
                 "Enabled the following repos: %s",
                 (", ".join(enable_list)).replace("--enable=", ""),
             )
-        if len(disable_list) > 0:
+        if disable_list:
             self.log.debug(
                 "Disabled the following repos: %s",
                 (", ".join(disable_list)).replace("--disable=", ""),

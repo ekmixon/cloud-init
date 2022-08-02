@@ -81,16 +81,12 @@ def givecmdline(pid):
     # Returns the cmdline for the given process id. In Linux we can use procfs
     # for this but on BSD there is /usr/bin/procstat.
     try:
-        # Example output from procstat -c 1
-        #   PID COMM             ARGS
-        #     1 init             /bin/init --
-        if util.is_FreeBSD():
-            (output, _err) = subp.subp(["procstat", "-c", str(pid)])
-            line = output.splitlines()[1]
-            m = re.search(r"\d+ (\w|\.|-)+\s+(/\w.+)", line)
-            return m.group(2)
-        else:
-            return util.load_file("/proc/%s/cmdline" % pid)
+        if not util.is_FreeBSD():
+            return util.load_file(f"/proc/{pid}/cmdline")
+        (output, _err) = subp.subp(["procstat", "-c", str(pid)])
+        line = output.splitlines()[1]
+        m = re.search(r"\d+ (\w|\.|-)+\s+(/\w.+)", line)
+        return m[2]
     except IOError:
         return None
 
@@ -98,31 +94,29 @@ def givecmdline(pid):
 def check_condition(cond, log=None):
     if isinstance(cond, bool):
         if log:
-            log.debug("Static Condition: %s" % cond)
+            log.debug(f"Static Condition: {cond}")
         return cond
 
-    pre = "check_condition command (%s): " % cond
+    pre = f"check_condition command ({cond}): "
     try:
         proc = subprocess.Popen(cond, shell=not isinstance(cond, list))
         proc.communicate()
         ret = proc.returncode
         if ret == 0:
             if log:
-                log.debug(pre + "exited 0. condition met.")
+                log.debug(f"{pre}exited 0. condition met.")
             return True
         elif ret == 1:
             if log:
-                log.debug(pre + "exited 1. condition not met.")
+                log.debug(f"{pre}exited 1. condition not met.")
             return False
         else:
             if log:
-                log.warning(
-                    pre + "unexpected exit %s. " % ret + "do not apply change."
-                )
+                log.warning(pre + f"unexpected exit {ret}. " + "do not apply change.")
             return False
     except Exception as e:
         if log:
-            log.warning(pre + "Unexpected error: %s" % e)
+            log.warning(pre + f"Unexpected error: {e}")
         return False
 
 
@@ -133,7 +127,7 @@ def handle(_name, cfg, cloud, log, _args):
             log.debug("no power_state provided. doing nothing")
             return
     except Exception as e:
-        log.warning("%s Not performing power state change!" % str(e))
+        log.warning(f"{str(e)} Not performing power state change!")
         return
 
     if condition is False:
@@ -149,7 +143,7 @@ def handle(_name, cfg, cloud, log, _args):
 
     devnull_fp = open(os.devnull, "w")
 
-    log.debug("After pid %s ends, will execute: %s" % (mypid, " ".join(args)))
+    log.debug(f'After pid {mypid} ends, will execute: {" ".join(args)}')
 
     util.fork_cb(
         run_after_pid_gone,
@@ -237,24 +231,24 @@ def run_after_pid_gone(pid, pidcmdline, timeout, log, condition, func, args):
 
     while True:
         if time.time() > end_time:
-            msg = "timeout reached before %s ended" % pid
+            msg = f"timeout reached before {pid} ended"
             break
 
         try:
             cmdline = givecmdline(pid)
             if cmdline != pidcmdline:
-                msg = "cmdline changed for %s [now: %s]" % (pid, cmdline)
+                msg = f"cmdline changed for {pid} [now: {cmdline}]"
                 break
 
         except IOError as ioerr:
             if ioerr.errno in known_errnos:
                 msg = "pidfile gone [%d]" % ioerr.errno
             else:
-                fatal("IOError during wait: %s" % ioerr)
+                fatal(f"IOError during wait: {ioerr}")
             break
 
         except Exception as e:
-            fatal("Unexpected Exception: %s" % e)
+            fatal(f"Unexpected Exception: {e}")
 
         time.sleep(0.25)
 
@@ -268,7 +262,7 @@ def run_after_pid_gone(pid, pidcmdline, timeout, log, condition, func, args):
         if not check_condition(condition, log):
             return
     except Exception as e:
-        fatal("Unexpected Exception when checking condition: %s" % e)
+        fatal(f"Unexpected Exception when checking condition: {e}")
 
     func(*args)
 

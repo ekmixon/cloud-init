@@ -111,9 +111,7 @@ def _call_dmidecode(key, dmidecode_path):
         (result, _err) = subp.subp(cmd)
         result = result.strip()
         LOG.debug("dmidecode returned '%s' for '%s'", result, key)
-        if result.replace(".", "") == "":
-            return ""
-        return result
+        return "" if result.replace(".", "") == "" else result
     except subp.ProcessExecutionError as e:
         LOG.debug("failed dmidecode cmd: %s\n%s", cmd, e)
         return None

@@ -85,13 +85,13 @@ def _decode(data, encoding=None):
     elif encoding.lower() in ["gzip", "gz"]:
         return util.decomp_gzip(data, quiet=False, decode=None)
     else:
-        raise IOError("Unknown random_seed encoding: %s" % (encoding))
+        raise IOError(f"Unknown random_seed encoding: {encoding}")
 
 
 def handle_random_seed_command(command, required, env=None):
-    if not command and required:
-        raise ValueError("no command found but required=true")
-    elif not command:
+    if not command:
+        if required:
+            raise ValueError("no command found but required=true")
         LOG.debug("no command provided")
         return
 
@@ -101,9 +101,8 @@ def handle_random_seed_command(command, required, env=None):
             raise ValueError(
                 "command '{cmd}' not found but required=true".format(cmd=cmd)
             )
-        else:
-            LOG.debug("command '%s' not found for seed_command", cmd)
-            return
+        LOG.debug("command '%s' not found for seed_command", cmd)
+        return
     subp.subp(command, env=env, capture=False)
 
 

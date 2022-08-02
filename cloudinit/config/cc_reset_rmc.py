@@ -94,10 +94,9 @@ def reconfigure_rsct_subsystems():
 def get_node_id():
     try:
         fp = util.load_file(NODE_ID_FILE)
-        node_id = fp.split("\n")[0]
-        return node_id
+        return fp.split("\n")[0]
     except Exception:
-        util.logexc(LOG, "Failed to get node ID from file %s." % NODE_ID_FILE)
+        util.logexc(LOG, f"Failed to get node ID from file {NODE_ID_FILE}.")
         raise
 
 
@@ -105,7 +104,7 @@ def add_path(orig_path):
     # Adding the RSCT_PATH to env standard path
     # So thet cloud init automatically find and
     # run RECFGCT to create new node_id.
-    suff = ":" + orig_path if orig_path else ""
+    suff = f":{orig_path}" if orig_path else ""
     os.environ["PATH"] = RSCT_PATH + suff
     return os.environ["PATH"]
 

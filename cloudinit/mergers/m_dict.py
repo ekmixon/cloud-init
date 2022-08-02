@@ -12,10 +12,7 @@ MERGE_TYPES = (
 
 
 def _has_any(what, *keys):
-    for k in keys:
-        if k in what:
-            return True
-    return False
+    return any(k in what for k in keys)
 
 
 class Merger(object):
@@ -39,13 +36,14 @@ class Merger(object):
             "DictMerger: (method=%s,recurse_str=%s,"
             "recurse_dict=%s,recurse_array=%s,allow_delete=%s)"
         )
-        s = s % (
+        s %= (
             self._method,
             self._recurse_str,
             self._recurse_dict,
             self._recurse_array,
             self._allow_delete,
         )
+
         return s
 
     def _do_dict_replace(self, value, merge_with, do_replace):
@@ -79,7 +77,7 @@ class Merger(object):
         elif self._method == "no_replace":
             merged = self._do_dict_replace(dict(value), merge_with, False)
         else:
-            raise NotImplementedError("Unknown merge type %s" % (self._method))
+            raise NotImplementedError(f"Unknown merge type {self._method}")
         return merged
 
 

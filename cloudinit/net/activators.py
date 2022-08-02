@@ -267,11 +267,8 @@ def search_activator(
     if priority is None:
         priority = DEFAULT_PRIORITY
 
-    unknown = [i for i in priority if i not in DEFAULT_PRIORITY]
-    if unknown:
-        raise ValueError(
-            "Unknown activators provided in priority list: %s" % unknown
-        )
+    if unknown := [i for i in priority if i not in DEFAULT_PRIORITY]:
+        raise ValueError(f"Unknown activators provided in priority list: {unknown}")
 
     return [activator for activator in priority if activator.available(target)]
 
@@ -281,9 +278,7 @@ def select_activator(priority=None, target=None) -> Type[NetworkActivator]:
     if not found:
         if priority is None:
             priority = DEFAULT_PRIORITY
-        tmsg = ""
-        if target and target != "/":
-            tmsg = " in target=%s" % target
+        tmsg = f" in target={target}" if target and target != "/" else ""
         raise NoActivatorException(
             "No available network activators found%s. Searched "
             "through list: %s" % (tmsg, priority)

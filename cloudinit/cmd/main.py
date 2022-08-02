@@ -98,10 +98,7 @@ def extract_fns(args):
     # read that file already...
     fn_cfgs = []
     if args.files:
-        for fh in args.files:
-            # The realpath is more useful in logging
-            # so lets resolve to that...
-            fn_cfgs.append(os.path.realpath(fh.name))
+        fn_cfgs.extend(os.path.realpath(fh.name) for fh in args.files)
     return fn_cfgs
 
 
@@ -196,23 +193,19 @@ def attempt_cmdline_url(path, network=True, cmdline=None):
     header = b"#cloud-config"
     try:
         resp = url_helper.read_file_or_url(**kwargs)
-        if resp.ok():
-            data = resp.contents
-            if not resp.contents.startswith(header):
-                if cmdline_name == "cloud-config-url":
-                    level = logging.WARN
-                else:
-                    level = logging.INFO
-                return (
-                    level,
-                    "contents of '%s' did not start with %s" % (url, header),
-                )
-        else:
+        if not resp.ok():
             return (
                 level,
                 "url '%s' returned code %s. Ignoring." % (url, resp.code),
             )
 
+        data = resp.contents
+        if not resp.contents.startswith(header):
+            level = logging.WARN if cmdline_name == "cloud-config-url" else logging.INFO
+            return (
+                level,
+                "contents of '%s' did not start with %s" % (url, header),
+            )
     except url_helper.UrlError as e:
         return (level, "retrieving url '%s' failed: %s" % (url, e))
 

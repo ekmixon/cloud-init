@@ -157,9 +157,7 @@ def install_puppet_aio(
     :param collection: collection to install, blank defaults to latest
     :param cleanup: whether to purge the puppetlabs repo after installation
     """
-    args = []
-    if version is not None:
-        args = ["-v", version]
+    args = ["-v", version] if version is not None else []
     if collection is not None:
         args += ["-c", collection]
 
@@ -220,9 +218,10 @@ def handle(name, cfg, cloud, log, _args):
     elif install:
         log.debug(
             "Attempting to install puppet %s from %s",
-            version if version else "latest",
+            version or "latest",
             install_type,
         )
+
 
         if install_type == "packages":
             cloud.distro.install_packages((package_name, version))
@@ -291,9 +290,7 @@ def handle(name, cfg, cloud, log, _args):
                     puppet_config.set(cfg_name, o, v)
             # We got all our config as wanted we'll rename
             # the previous puppet.conf and create our new one
-            util.rename(
-                p_constants.conf_path, "%s.old" % (p_constants.conf_path)
-            )
+            util.rename(p_constants.conf_path, f"{p_constants.conf_path}.old")
             util.write_file(p_constants.conf_path, puppet_config.stringify())
 
     if "csr_attributes" in puppet_cfg:

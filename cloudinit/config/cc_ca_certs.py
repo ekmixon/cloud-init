@@ -205,8 +205,7 @@ def handle(name, cfg, cloud, log, _args):
 
     # If we are given any new trusted CA certs to add, add them.
     if "trusted" in ca_cert_cfg:
-        trusted_certs = util.get_cfg_option_list(ca_cert_cfg, "trusted")
-        if trusted_certs:
+        if trusted_certs := util.get_cfg_option_list(ca_cert_cfg, "trusted"):
             log.debug("Adding %d certificates" % len(trusted_certs))
             add_ca_certs(distro_cfg, trusted_certs)
 

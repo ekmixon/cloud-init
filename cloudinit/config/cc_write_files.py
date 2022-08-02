@@ -303,12 +303,7 @@ def decode_perms(perm, default):
     if perm is None:
         return default
     try:
-        if isinstance(perm, (int, float)):
-            # Just 'downcast' it (if a float)
-            return int(perm)
-        else:
-            # Force to string and try octal conversion
-            return int(str(perm), 8)
+        return int(perm) if isinstance(perm, (int, float)) else int(str(perm), 8)
     except (TypeError, ValueError):
         reps = []
         for r in (perm, default):
@@ -327,8 +322,6 @@ def extract_contents(contents, extraction_types):
             result = util.decomp_gzip(result, quiet=False, decode=False)
         elif t == "application/base64":
             result = base64.b64decode(result)
-        elif t == UNKNOWN_ENC:
-            pass
     return result
 
 

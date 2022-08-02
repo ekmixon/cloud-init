@@ -64,14 +64,15 @@ class EphemeralDHCPv4(object):
     def __enter__(self):
         """Setup sandboxed dhcp context, unless connectivity_url can already be
         reached."""
-        if self.connectivity_url_data:
-            if has_url_connectivity(self.connectivity_url_data):
-                LOG.debug(
-                    "Skip ephemeral DHCP setup, instance has connectivity"
-                    " to %s",
-                    self.connectivity_url_data,
-                )
-                return
+        if self.connectivity_url_data and has_url_connectivity(
+            self.connectivity_url_data
+        ):
+            LOG.debug(
+                "Skip ephemeral DHCP setup, instance has connectivity"
+                " to %s",
+                self.connectivity_url_data,
+            )
+            return
         return self.obtain_lease()
 
     def __exit__(self, excp_type, excp_value, excp_traceback):
@@ -204,11 +205,8 @@ def parse_dhcp_lease_file(lease_file):
     for lease in lease_regex.findall(lease_content):
         lease_options = []
         for line in lease.split(";"):
-            # Strip newlines, double-quotes and option prefix
-            line = line.strip().replace('"', "").replace("option ", "")
-            if not line:
-                continue
-            lease_options.append(line.split(" ", 1))
+            if line := line.strip().replace('"', "").replace("option ", ""):
+                lease_options.append(line.split(" ", 1))
         dhcp_leases.append(dict(lease_options))
     if not dhcp_leases:
         raise InvalidDHCPLeaseFileError(
@@ -269,17 +267,9 @@ def dhcp_discovery(dhclient_cmd_path, interface, cleandir, dhcp_log_func=None):
     ]
     out, err = subp.subp(cmd, capture=True)
 
-    # Wait for pid file and lease file to appear, and for the process
-    # named by the pid file to daemonize (have pid 1 as its parent). If we
-    # try to read the lease file before daemonization happens, we might try
-    # to read it before the dhclient has actually written it. We also have
-    # to wait until the dhclient has become a daemon so we can be sure to
-    # kill the correct process, thus freeing cleandir to be deleted back
-    # up the callstack.
-    missing = util.wait_for_files(
+    if missing := util.wait_for_files(
         [pid_file, lease_file], maxwait=5, naplen=0.01
-    )
-    if missing:
+    ):
         LOG.warning(
             "dhclient did not produce expected files: %s",
             ", ".join(os.path.basename(f) for f in missing),
@@ -288,7 +278,7 @@ def dhcp_discovery(dhclient_cmd_path, interface, cleandir, dhcp_log_func=None):
 
     ppid = "unknown"
     daemonized = False
-    for _ in range(0, 1000):
+    for _ in range(1000):
         pid_content = util.load_file(pid_file).strip()
         try:
             pid = int(pid_content)
@@ -350,10 +340,14 @@ def networkd_get_option_from_leases(keyname, leases_d=None):
     if leases_d is None:
         leases_d = NETWORKD_LEASES_DIR
     leases = networkd_load_leases(leases_d=leases_d)
-    for _ifindex, data in sorted(leases.items()):
-        if data.get(keyname):
-            return data[keyname]
-    return None
+    return next(
+        (
+            data[keyname]
+            for _ifindex, data in sorted(leases.items())
+            if data.get(keyname)
+        ),
+        None,
+    )
 
 
 def parse_static_routes(rfc3442):
@@ -448,7 +442,7 @@ def parse_static_routes(rfc3442):
             )
             return static_routes
 
-        static_routes.append(("%s/%s" % (net_address, net_length), gateway))
+        static_routes.append((f"{net_address}/{net_length}", gateway))
 
     return static_routes
 

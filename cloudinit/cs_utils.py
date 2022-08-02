@@ -19,6 +19,7 @@ hostname to the VM name or passing SSH public keys through server meta.
 For more information take a look at the Server Context section of CloudSigma
 API Docs: http://cloudsigma-docs.readthedocs.org/en/latest/server_context.html
 """
+
 import json
 import platform
 
@@ -28,9 +29,7 @@ from cloudinit import serial
 READ_TIMEOUT = 60
 WRITE_TIMEOUT = 10
 
-SERIAL_PORT = "/dev/ttyS1"
-if platform.system() == "Windows":
-    SERIAL_PORT = "COM2"
+SERIAL_PORT = "COM2" if platform.system() == "Windows" else "/dev/ttyS1"
 
 
 class Cepko(object):

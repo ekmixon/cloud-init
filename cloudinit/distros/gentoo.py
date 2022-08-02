@@ -75,7 +75,7 @@ class Distro(distros.Distro):
                 nameservers.extend(info["dns-nameservers"])
             if dev == "lo":
                 continue
-            net_fn = self.network_conf_fn + "." + dev
+            net_fn = f"{self.network_conf_fn}.{dev}"
             dns_nameservers = info.get("dns-nameservers")
             if isinstance(dns_nameservers, (list, tuple)):
                 dns_nameservers = str(tuple(dns_nameservers)).replace(",", "")
@@ -137,7 +137,7 @@ class Distro(distros.Distro):
             util.sym_link("/etc/init.d/net.lo", file_path)
 
     def _bring_up_interface(self, device_name):
-        cmd = ["/etc/init.d/net.%s" % device_name, "restart"]
+        cmd = [f"/etc/init.d/net.{device_name}", "restart"]
         LOG.debug(
             "Attempting to run bring up interface %s using command %s",
             device_name,
@@ -155,26 +155,22 @@ class Distro(distros.Distro):
             return False
 
     def _bring_up_interfaces(self, device_names):
-        use_all = False
-        for d in device_names:
-            if d == "all":
-                use_all = True
-        if use_all:
-            # Grab device names from init scripts
-            cmd = ["ls", "/etc/init.d/net.*"]
-            try:
-                (_out, err) = subp.subp(cmd)
-                if len(err):
-                    LOG.warning(
-                        "Running %s resulted in stderr output: %s", cmd, err
-                    )
-            except subp.ProcessExecutionError:
-                util.logexc(LOG, "Running interface command %s failed", cmd)
-                return False
-            devices = [x.split(".")[2] for x in _out.split("  ")]
-            return distros.Distro._bring_up_interfaces(self, devices)
-        else:
+        use_all = any(d == "all" for d in device_names)
+        if not use_all:
             return distros.Distro._bring_up_interfaces(self, device_names)
+        # Grab device names from init scripts
+        cmd = ["ls", "/etc/init.d/net.*"]
+        try:
+            (_out, err) = subp.subp(cmd)
+            if len(err):
+                LOG.warning(
+                    "Running %s resulted in stderr output: %s", cmd, err
+                )
+        except subp.ProcessExecutionError:
+            util.logexc(LOG, "Running interface command %s failed", cmd)
+            return False
+        devices = [x.split(".")[2] for x in _out.split("  ")]
+        return distros.Distro._bring_up_interfaces(self, devices)
 
     def _write_hostname(self, hostname, filename):
         conf = None
@@ -210,9 +206,7 @@ class Distro(distros.Distro):
             hostname = conf.hostname
         except IOError:
             pass
-        if not hostname:
-            return default
-        return hostname
+        return hostname or default
 
     def set_timezone(self, tz):
         distros.set_etc_timezone(tz=tz, tz_file=self._find_tz_file(tz))

@@ -93,9 +93,7 @@ class Distro(distros.Distro):
             self.system_locale = read_system_locale()
 
         # Return system_locale setting if valid, else use default locale
-        return (
-            self.system_locale if self.system_locale else self.default_locale
-        )
+        return self.system_locale or self.default_locale
 
     def apply_locale(self, locale, out_fn=None, keyname="LANG"):
         """Apply specified locale to system, regenerate if specified locale
@@ -110,7 +108,7 @@ class Distro(distros.Distro):
         # Update system locale config with specified locale if needed
         distro_locale = self.get_locale()
         conf_fn_exists = os.path.exists(out_fn)
-        sys_locale_unset = False if self.system_locale else True
+        sys_locale_unset = not self.system_locale
         need_regen = (
             locale.lower() != distro_locale.lower()
             or not conf_fn_exists
@@ -170,9 +168,7 @@ class Distro(distros.Distro):
             hostname = conf.hostname
         except IOError:
             pass
-        if not hostname:
-            return default
-        return hostname
+        return hostname or default
 
     def _get_localhost_ip(self):
         # Note: http://www.leonardoborda.com/blog/127-0-1-1-ubuntu-debian/
@@ -216,10 +212,7 @@ class Distro(distros.Distro):
             LOG.debug("apt lock available")
             try:
                 # Allow the output of this to flow outwards (not be captured)
-                log_msg = "apt-%s [%s]" % (
-                    short_cmd,
-                    " ".join(subp_kwargs["args"]),
-                )
+                log_msg = f'apt-{short_cmd} [{" ".join(subp_kwargs["args"])}]'
                 return util.log_time(
                     logfunc=LOG.debug,
                     msg=log_msg,
@@ -343,11 +336,11 @@ def _maybe_remove_legacy_eth0(path="/etc/network/interfaces.d/eth0.cfg"):
         ]
         if lines == known_contents:
             util.del_file(path)
-            msg = "removed %s with known contents" % path
+            msg = f"removed {path} with known contents"
         else:
             msg = bmsg + " '%s' exists with user configured content." % path
     except Exception:
-        msg = bmsg + " %s exists, but could not be read." % path
+        msg = bmsg + f" {path} exists, but could not be read."
 
     LOG.warning(msg)
 
@@ -356,7 +349,7 @@ def read_system_locale(sys_path=LOCALE_CONF_FN, keyname="LANG"):
     """Read system default locale setting, if present"""
     sys_val = ""
     if not sys_path:
-        raise ValueError("Invalid path: %s" % sys_path)
+        raise ValueError(f"Invalid path: {sys_path}")
 
     if os.path.exists(sys_path):
         locale_content = util.load_file(sys_path)
@@ -372,11 +365,7 @@ def update_locale_conf(locale, sys_path, keyname="LANG"):
         "Updating %s with locale setting %s=%s", sys_path, keyname, locale
     )
     subp.subp(
-        [
-            "update-locale",
-            "--locale-file=" + sys_path,
-            "%s=%s" % (keyname, locale),
-        ],
+        ["update-locale", f"--locale-file={sys_path}", f"{keyname}={locale}"],
         capture=False,
     )
 

@@ -30,10 +30,7 @@ def _normalize_groups(grp_cfg):
             if isinstance(i, dict):
                 for k, v in i.items():
                     if not isinstance(v, (list, str)):
-                        raise TypeError(
-                            "Bad group member type %s"
-                            % (type_utils.obj_name(v))
-                        )
+                        raise TypeError(f"Bad group member type {type_utils.obj_name(v)}")
 
                     if isinstance(v, list):
                         c_grp_cfg.setdefault(k, []).extend(v)
@@ -43,21 +40,18 @@ def _normalize_groups(grp_cfg):
                 if i not in c_grp_cfg:
                     c_grp_cfg[i] = []
             else:
-                raise TypeError(
-                    "Unknown group name type %s" % (type_utils.obj_name(i))
-                )
+                raise TypeError(f"Unknown group name type {type_utils.obj_name(i)}")
         grp_cfg = c_grp_cfg
 
-    groups = {}
-    if isinstance(grp_cfg, dict):
-        for grp_name, grp_members in grp_cfg.items():
-            groups[grp_name] = util.uniq_merge_sorted(grp_members)
-    else:
+    if not isinstance(grp_cfg, dict):
         raise TypeError(
-            "Group config must be list, dict or string type only but found %s"
-            % (type_utils.obj_name(grp_cfg))
+            f"Group config must be list, dict or string type only but found {type_utils.obj_name(grp_cfg)}"
         )
-    return groups
+
+    return {
+        grp_name: util.uniq_merge_sorted(grp_members)
+        for grp_name, grp_members in grp_cfg.items()
+    }
 
 
 # Normalizes an input group configuration which can be: a list or a dictionary
@@ -81,9 +75,9 @@ def _normalize_users(u_cfg, def_user_cfg=None):
                 ad_ucfg.append(v)
             else:
                 raise TypeError(
-                    "Unmappable user value type %s for key %s"
-                    % (type_utils.obj_name(v), k)
+                    f"Unmappable user value type {type_utils.obj_name(v)} for key {k}"
                 )
+
         u_cfg = ad_ucfg
     elif isinstance(u_cfg, str):
         u_cfg = util.uniq_merge_sorted(u_cfg)
@@ -110,8 +104,7 @@ def _normalize_users(u_cfg, def_user_cfg=None):
         for uname, uconfig in users.items():
             c_uconfig = {}
             for k, v in uconfig.items():
-                k = k.replace("-", "_").strip()
-                if k:
+                if k := k.replace("-", "_").strip():
                     c_uconfig[k] = v
             c_users[uname] = c_uconfig
         users = c_users
@@ -218,10 +211,7 @@ def normalize_users_groups(cfg, distro):
         elif isinstance(base_users, str):
             base_users += ",default"
 
-    groups = {}
-    if "groups" in cfg:
-        groups = _normalize_groups(cfg["groups"])
-
+    groups = _normalize_groups(cfg["groups"]) if "groups" in cfg else {}
     users = _normalize_users(base_users, default_user_config)
     return (users, groups)
 
@@ -234,9 +224,7 @@ def extract_default(users, default_name=None, default_config=None):
 
     def safe_find(entry):
         config = entry[1]
-        if not config or "default" not in config:
-            return False
-        return config["default"]
+        return False if not config or "default" not in config else config["default"]
 
     tmp_users = dict(filter(safe_find, users.items()))
     if not tmp_users:

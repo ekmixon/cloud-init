@@ -2,6 +2,7 @@
 
 """Commandline utility to list the canonical cloud-id for an instance."""
 
+
 import argparse
 import json
 import sys
@@ -14,7 +15,7 @@ from cloudinit.sources import (
 )
 from cloudinit.util import error
 
-DEFAULT_INSTANCE_JSON = "/run/cloud-init/%s" % INSTANCE_JSON_FILE
+DEFAULT_INSTANCE_JSON = f"/run/cloud-init/{INSTANCE_JSON_FILE}"
 
 NAME = "cloud-id"
 
@@ -52,9 +53,9 @@ def get_parser(parser=None):
         "--instance-data",
         type=str,
         default=DEFAULT_INSTANCE_JSON,
-        help="Path to instance-data.json file. Default is %s"
-        % DEFAULT_INSTANCE_JSON,
+        help=f"Path to instance-data.json file. Default is {DEFAULT_INSTANCE_JSON}",
     )
+
     return parser
 
 

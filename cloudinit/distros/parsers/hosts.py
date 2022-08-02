@@ -40,9 +40,7 @@ class HostsConf(object):
                 continue
             else:
                 (pieces, _tail) = components
-                if len(pieces) and pieces[0] == ip:
-                    pass
-                elif len(pieces):
+                if len(pieces) and pieces[0] != ip:
                     n_entries.append((line_type, list(components)))
         self._contents = n_entries
 
@@ -69,9 +67,7 @@ class HostsConf(object):
         self.parse()
         contents = StringIO()
         for (line_type, components) in self._contents:
-            if line_type == "blank":
-                contents.write("%s\n" % (components[0]))
-            elif line_type == "all_comment":
+            if line_type in ["blank", "all_comment"]:
                 contents.write("%s\n" % (components[0]))
             elif line_type == "option":
                 (pieces, tail) = components

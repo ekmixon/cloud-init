@@ -17,9 +17,7 @@ FEATURES = [
 
 def version_string():
     """Extract a version string from cloud-init."""
-    if not _PACKAGED_VERSION.startswith("@@"):
-        return _PACKAGED_VERSION
-    return __VERSION__
+    return __VERSION__ if _PACKAGED_VERSION.startswith("@@") else _PACKAGED_VERSION
 
 
 # vi: ts=4 expandtab

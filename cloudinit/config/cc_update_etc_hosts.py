@@ -69,19 +69,18 @@ def handle(name, cfg, cloud, log, _args):
             )
             return
 
-        # Render from a template file
-        tpl_fn_name = cloud.get_template_filename(
-            "hosts.%s" % (cloud.distro.osfamily)
-        )
-        if not tpl_fn_name:
-            raise RuntimeError(
-                "No hosts template could be found for distro %s"
-                % (cloud.distro.osfamily)
+        if tpl_fn_name := cloud.get_template_filename(
+            f"hosts.{cloud.distro.osfamily}"
+        ):
+            templater.render_to_file(
+                tpl_fn_name, hosts_fn, {"hostname": hostname, "fqdn": fqdn}
             )
 
-        templater.render_to_file(
-            tpl_fn_name, hosts_fn, {"hostname": hostname, "fqdn": fqdn}
-        )
+        else:
+            raise RuntimeError(
+                f"No hosts template could be found for distro {cloud.distro.osfamily}"
+            )
+
 
     elif manage_hosts == "localhost":
         (hostname, fqdn) = util.get_hostname_fqdn(cfg, cloud)

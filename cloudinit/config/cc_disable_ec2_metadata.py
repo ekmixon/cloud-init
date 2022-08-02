@@ -37,8 +37,9 @@ __doc__ = get_meta_doc(meta)
 
 
 def handle(name, cfg, _cloud, log, _args):
-    disabled = util.get_cfg_option_bool(cfg, "disable_ec2_metadata", False)
-    if disabled:
+    if disabled := util.get_cfg_option_bool(
+        cfg, "disable_ec2_metadata", False
+    ):
         reject_cmd = None
         if subp.which("ip"):
             reject_cmd = REJECT_CMD_IP

@@ -105,19 +105,16 @@ def resizer_factory(mode):
             raise ValueError("No resizers available")
 
     else:
-        mmap = {}
-        for (k, v) in RESIZERS:
-            mmap[k] = v
-
+        mmap = dict(RESIZERS)
         if mode not in mmap:
-            raise TypeError("unknown resize mode %s" % mode)
+            raise TypeError(f"unknown resize mode {mode}")
 
         mclass = mmap[mode]()
         if mclass.available():
             resize_class = mclass
 
         if not resize_class:
-            raise ValueError("mode %s not available" % mode)
+            raise ValueError(f"mode {mode} not available")
 
     return resize_class
 
@@ -231,25 +228,25 @@ def device_part_info(devpath):
     rpath = os.path.realpath(devpath)
 
     bname = os.path.basename(rpath)
-    syspath = "/sys/class/block/%s" % bname
+    syspath = f"/sys/class/block/{bname}"
 
     # FreeBSD doesn't know of sysfs so just get everything we need from
     # the device, like /dev/vtbd0p2.
     if util.is_FreeBSD():
-        freebsd_part = "/dev/" + util.find_freebsd_part(devpath)
+        freebsd_part = f"/dev/{util.find_freebsd_part(devpath)}"
         m = re.search("^(/dev/.+)p([0-9])$", freebsd_part)
-        return (m.group(1), m.group(2))
+        return m[1], m[2]
     elif util.is_DragonFlyBSD():
-        dragonflybsd_part = "/dev/" + util.find_dragonflybsd_part(devpath)
+        dragonflybsd_part = f"/dev/{util.find_dragonflybsd_part(devpath)}"
         m = re.search("^(/dev/.+)s([0-9])$", dragonflybsd_part)
-        return (m.group(1), m.group(2))
+        return m[1], m[2]
 
     if not os.path.exists(syspath):
-        raise ValueError("%s had no syspath (%s)" % (devpath, syspath))
+        raise ValueError(f"{devpath} had no syspath ({syspath})")
 
     ptpath = os.path.join(syspath, "partition")
     if not os.path.exists(ptpath):
-        raise TypeError("%s not a partition" % devpath)
+        raise TypeError(f"{devpath} not a partition")
 
     ptnum = util.load_file(ptpath).rstrip()
 
@@ -259,7 +256,7 @@ def device_part_info(devpath):
     disksyspath = os.path.dirname(rsyspath)
 
     diskmajmin = util.load_file(os.path.join(disksyspath, "dev")).rstrip()
-    diskdevpath = os.path.realpath("/dev/block/%s" % diskmajmin)
+    diskdevpath = os.path.realpath(f"/dev/block/{diskmajmin}")
 
     # diskdevpath has something like 253:0
     # and udev has put links in /dev/block/253:0 to the device name in /dev/
@@ -269,11 +266,10 @@ def device_part_info(devpath):
 def devent2dev(devent):
     if devent.startswith("/dev/"):
         return devent
-    else:
-        result = util.get_mount_info(devent)
-        if not result:
-            raise ValueError("Could not determine device of '%s' % dev_ent")
-        dev = result[0]
+    result = util.get_mount_info(devent)
+    if not result:
+        raise ValueError("Could not determine device of '%s' % dev_ent")
+    dev = result[0]
 
     container = util.is_container()
 
@@ -296,13 +292,7 @@ def resize_devices(resizer, devices):
         try:
             blockdev = devent2dev(devent)
         except ValueError as e:
-            info.append(
-                (
-                    devent,
-                    RESIZE.SKIPPED,
-                    "unable to convert to device: %s" % e,
-                )
-            )
+            info.append((devent, RESIZE.SKIPPED, f"unable to convert to device: {e}"))
             continue
 
         try:
@@ -336,9 +326,10 @@ def resize_devices(resizer, devices):
                 (
                     devent,
                     RESIZE.SKIPPED,
-                    "device_part_info(%s) failed: %s" % (blockdev, e),
+                    f"device_part_info({blockdev}) failed: {e}",
                 )
             )
+
             continue
 
         try:
@@ -348,28 +339,29 @@ def resize_devices(resizer, devices):
                     (
                         devent,
                         RESIZE.NOCHANGE,
-                        "no change necessary (%s, %s)" % (disk, ptnum),
+                        f"no change necessary ({disk}, {ptnum})",
                     )
                 )
+
             else:
                 info.append(
                     (
                         devent,
                         RESIZE.CHANGED,
-                        "changed (%s, %s) from %s to %s"
-                        % (disk, ptnum, old, new),
+                        f"changed ({disk}, {ptnum}) from {old} to {new}",
                     )
                 )
+
 
         except ResizeFailedException as e:
             info.append(
                 (
                     devent,
                     RESIZE.FAILED,
-                    "failed to resize: disk=%s, ptnum=%s: %s"
-                    % (disk, ptnum, e),
+                    f"failed to resize: disk={disk}, ptnum={ptnum}: {e}",
                 )
             )
+
 
     return info
 
@@ -388,14 +380,15 @@ def handle(_name, cfg, _cloud, log, _args):
 
     mode = mycfg.get("mode", "auto")
     if util.is_false(mode):
-        log.debug("growpart disabled: mode=%s" % mode)
+        log.debug(f"growpart disabled: mode={mode}")
         return
 
-    if util.is_false(mycfg.get("ignore_growroot_disabled", False)):
-        if os.path.isfile("/etc/growroot-disabled"):
-            log.debug("growpart disabled: /etc/growroot-disabled exists")
-            log.debug("use ignore_growroot_disabled to ignore")
-            return
+    if util.is_false(
+        mycfg.get("ignore_growroot_disabled", False)
+    ) and os.path.isfile("/etc/growroot-disabled"):
+        log.debug("growpart disabled: /etc/growroot-disabled exists")
+        log.debug("use ignore_growroot_disabled to ignore")
+        return
 
     devices = util.get_cfg_option_list(mycfg, "devices", ["/"])
     if not len(devices):

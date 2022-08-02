@@ -57,10 +57,11 @@ class Distro(distros.Distro):
             "# This file is created by cloud-init once per new instance boot",
             "#",
             "export CHARSET=UTF-8",
-            "export LANG=%s" % locale,
+            f"export LANG={locale}",
             "export LC_COLLATE=C",
             "",
         ]
+
         util.write_file(out_fn, "\n".join(lines), 0o644)
 
     def install_packages(self, pkglist):
@@ -96,9 +97,7 @@ class Distro(distros.Distro):
             hostname = conf.hostname
         except IOError:
             pass
-        if not hostname:
-            return default
-        return hostname
+        return hostname or default
 
     def _get_localhost_ip(self):
         return "127.0.1.1"
@@ -110,14 +109,12 @@ class Distro(distros.Distro):
         if pkgs is None:
             pkgs = []
 
-        cmd = ["apk"]
-        # Redirect output
-        cmd.append("--quiet")
-
-        if args and isinstance(args, str):
-            cmd.append(args)
-        elif args and isinstance(args, list):
-            cmd.extend(args)
+        cmd = ["apk", "--quiet"]
+        if args:
+            if isinstance(args, str):
+                cmd.append(args)
+            elif isinstance(args, list):
+                cmd.extend(args)
 
         if command:
             cmd.append(command)

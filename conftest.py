@@ -44,9 +44,7 @@ class _FixtureUtils:
         except AttributeError:
             # Older versions of pytest don't have the new API
             marker = request.node.get_marker(marker_name)
-        if marker is not None:
-            return marker.args
-        return default
+        return marker.args if marker is not None else default
 
     @staticmethod
     def closest_marker_first_arg_or(request, marker_name: str, default):
@@ -55,14 +53,12 @@ class _FixtureUtils:
         This is a convenience wrapper around closest_marker_args_or, see there
         for full details.
         """
-        result = _FixtureUtils.closest_marker_args_or(
+        if result := _FixtureUtils.closest_marker_args_or(
             request, marker_name, [default]
-        )
-        if not result:
-            raise TypeError(
-                "Missing expected argument to {} marker".format(marker_name)
-            )
-        return result[0]
+        ):
+            return result[0]
+        else:
+            raise TypeError(f"Missing expected argument to {marker_name} marker")
 
 
 @pytest.fixture(autouse=True)

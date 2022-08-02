@@ -78,8 +78,7 @@ def handle(name, cfg, cloud, log, _args):
 
         try:
             env = os.environ.copy()
-            iid = cloud.get_instance_id()
-            if iid:
+            if iid := cloud.get_instance_id():
                 env["INSTANCE_ID"] = str(iid)
             cmd = ["/bin/sh", tmpf.name]
             subp.subp(cmd, env=env, capture=False)

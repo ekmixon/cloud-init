@@ -79,7 +79,7 @@ def _iface_add_subnet(iface, subnet):
         if key == "netmask":
             continue
         if key == "address":
-            value = "%s/%s" % (subnet["address"], subnet["prefix"])
+            value = f'{subnet["address"]}/{subnet["prefix"]}'
         if value and key in valid_map:
             if type(value) == list:
                 value = " ".join(value)
@@ -141,8 +141,7 @@ def _iface_add_attrs(iface, index, ipv4_subnet_mtu):
                 )
             continue
         if key in multiline_keys:
-            for v in value:
-                content.append("    {0} {1}".format(renames.get(key, key), v))
+            content.extend("    {0} {1}".format(renames.get(key, key), v) for v in value)
             continue
         if type(value) == list:
             value = " ".join(value)
@@ -158,9 +157,9 @@ def _iface_start_entry(iface, index, render_hwaddress=False):
     if control == "auto":
         cverb = "auto"
     elif control in ("hotplug",):
-        cverb = "allow-" + control
+        cverb = f"allow-{control}"
     else:
-        cverb = "# control-" + control
+        cverb = f"# control-{control}"
 
     subst = iface.copy()
     subst.update({"fullname": fullname, "cverb": cverb})
@@ -249,10 +248,7 @@ def _parse_deb_config_data(ifaces, contents, src_dir, src_path):
             ifaces[iface]["method"] = method
             currif = iface
         elif option == "hwaddress":
-            if split[1] == "ether":
-                val = split[2]
-            else:
-                val = split[1]
+            val = split[2] if split[1] == "ether" else split[1]
             ifaces[currif]["hwaddress"] = val
         elif option in NET_CONFIG_OPTIONS:
             ifaces[currif][option] = split[1]
@@ -337,20 +333,17 @@ def _ifaces_to_net_config_data(ifaces):
         # devname is 'eth0' for name='eth0:1'
         devname = name.partition(":")[0]
         if devname not in devs:
-            if devname == "lo":
-                dtype = "loopback"
-            else:
-                dtype = "physical"
+            dtype = "loopback" if devname == "lo" else "physical"
             devs[devname] = {"type": dtype, "name": devname, "subnets": []}
             # this isnt strictly correct, but some might specify
             # hwaddress on a nic for matching / declaring name.
             if "hwaddress" in data:
                 devs[devname]["mac_address"] = data["hwaddress"]
-        subnet = {"_orig_eni_name": name, "type": data["method"]}
-        if data.get("auto"):
-            subnet["control"] = "auto"
-        else:
-            subnet["control"] = "manual"
+        subnet = {
+            "_orig_eni_name": name,
+            "type": data["method"],
+            "control": "auto" if data.get("auto") else "manual",
+        }
 
         if data.get("method") == "static":
             subnet["address"] = data["address"]
@@ -362,7 +355,7 @@ def _ifaces_to_net_config_data(ifaces):
         if "dns" in data:
             for n in ("nameservers", "search"):
                 if n in data["dns"] and data["dns"][n]:
-                    subnet["dns_" + n] = data["dns"][n]
+                    subnet[f"dns_{n}"] = data["dns"][n]
         devs[devname]["subnets"].append(subnet)
 
     return {"version": 1, "config": [devs[d] for d in sorted(devs)]}
@@ -395,9 +388,8 @@ class Renderer(renderer.Renderer):
         1. http://askubuntu.com/questions/168033/
                  how-to-set-static-routes-in-ubuntu-server
         """
-        content = []
-        up = indent + "post-up route add"
-        down = indent + "pre-down route del"
+        up = f"{indent}post-up route add"
+        down = f"{indent}pre-down route del"
         or_true = " || true"
         mapping = {
             "gateway": "gw",
@@ -415,7 +407,7 @@ class Renderer(renderer.Renderer):
             if default_gw and k == "network":
                 continue
             if k == "gateway":
-                route_line += "%s %s %s" % (default_gw, mapping[k], route[k])
+                route_line += f"{default_gw} {mapping[k]} {route[k]}"
             elif k in route:
                 if k == "network":
                     if ":" in route[k]:
@@ -425,19 +417,16 @@ class Renderer(renderer.Renderer):
                     else:
                         route_line += " -net"
                     if "prefix" in route:
-                        route_line += " %s/%s" % (route[k], route["prefix"])
+                        route_line += f' {route[k]}/{route["prefix"]}'
                 else:
-                    route_line += " %s %s" % (mapping[k], route[k])
-        content.append(up + route_line + or_true)
-        content.append(down + route_line + or_true)
-        return content
+                    route_line += f" {mapping[k]} {route[k]}"
+        return [up + route_line + or_true, down + route_line + or_true]
 
     def _render_iface(self, iface, render_hwaddress=False):
         sections = []
         subnets = iface.get("subnets", {})
         accept_ra = iface.pop("accept-ra", None)
-        ethernet_wol = iface.pop("wakeonlan", None)
-        if ethernet_wol:
+        if ethernet_wol := iface.pop("wakeonlan", None):
             # Specify WOL setting 'g' for using "Magic Packet"
             iface["ethernet-wol"] = "g"
         if subnets:
@@ -452,11 +441,7 @@ class Renderer(renderer.Renderer):
                 else:
                     ipv4_subnet_mtu = subnet.get("mtu")
                 iface["inet"] = subnet_inet
-                if (
-                    subnet["type"] == "dhcp4"
-                    or subnet["type"] == "dhcp6"
-                    or subnet["type"] == "ipv6_dhcpv6-stateful"
-                ):
+                if subnet["type"] in ["dhcp4", "dhcp6", "ipv6_dhcpv6-stateful"]:
                     # Configure network settings using DHCP or DHCPv6
                     iface["mode"] = "dhcp"
                     if accept_ra is not None:
@@ -481,9 +466,7 @@ class Renderer(renderer.Renderer):
 
                 # do not emit multiple 'auto $IFACE' lines as older (precise)
                 # ifupdown complains
-                if True in [
-                    "auto %s" % (iface["name"]) in line for line in sections
-                ]:
+                if True in [f'auto {iface["name"]}' in line for line in sections]:
                     iface["control"] = "alias"
 
                 lines = list(
@@ -524,12 +507,10 @@ class Renderer(renderer.Renderer):
             if iface.get("name") == "lo":
                 lo = copy.deepcopy(iface)
 
-        nameservers = network_state.dns_nameservers
-        if nameservers:
+        if nameservers := network_state.dns_nameservers:
             lo["subnets"][0]["dns_nameservers"] = " ".join(nameservers)
 
-        searchdomains = network_state.dns_searchdomains
-        if searchdomains:
+        if searchdomains := network_state.dns_searchdomains:
             lo["subnets"][0]["dns_search"] = " ".join(searchdomains)
 
         # Apply a sort order to ensure that we write out the physical
@@ -556,15 +537,16 @@ class Renderer(renderer.Renderer):
                 self._render_iface(iface, render_hwaddress=render_hwaddress)
             )
 
-        for route in network_state.iter_routes():
-            sections.append(self._render_route(route))
+        sections.extend(
+            self._render_route(route) for route in network_state.iter_routes()
+        )
 
         return "\n\n".join(["\n".join(s) for s in sections]) + "\n"
 
     def render_network_state(self, network_state, templates=None, target=None):
         fpeni = subp.target_path(target, self.eni_path)
         util.ensure_dir(os.path.dirname(fpeni))
-        header = self.eni_header if self.eni_header else ""
+        header = self.eni_header or ""
         util.write_file(fpeni, header + self._render_interfaces(network_state))
 
         if self.netrules_path:
@@ -602,10 +584,7 @@ def available(target=None):
         if not subp.which(p, search=search, target=target):
             return False
     eni = subp.target_path(target, "etc/network/interfaces")
-    if not os.path.isfile(eni):
-        return False
-
-    return True
+    return bool(os.path.isfile(eni))
 
 
 # vi: ts=4 expandtab

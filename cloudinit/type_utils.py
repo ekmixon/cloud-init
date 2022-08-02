@@ -22,10 +22,7 @@ def obj_name(obj):
     if isinstance(obj, _NAME_TYPES):
         return str(obj.__name__)
     else:
-        if not hasattr(obj, "__class__"):
-            return repr(obj)
-        else:
-            return obj_name(obj.__class__)
+        return obj_name(obj.__class__) if hasattr(obj, "__class__") else repr(obj)
 
 
 # vi: ts=4 expandtab

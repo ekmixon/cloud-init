@@ -19,16 +19,14 @@ path_map = {
 
 
 def get_mime_type_by_frequency(freq):
-    mime_type = f"text/x-shellscript-{path_map[freq]}"
-    return mime_type
+    return f"text/x-shellscript-{path_map[freq]}"
 
 
 def get_script_folder_by_frequency(freq, scripts_dir):
     """Return the frequency-specific subfolder for a given frequency constant
     and parent folder."""
     freqPath = path_map[freq]
-    folder = os.path.join(scripts_dir, freqPath)
-    return folder
+    return os.path.join(scripts_dir, freqPath)
 
 
 def write_script_by_frequency(script_path, payload, frequency, scripts_dir):

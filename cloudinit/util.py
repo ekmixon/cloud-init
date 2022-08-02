@@ -57,7 +57,7 @@ LOG = logging.getLogger(__name__)
 FN_REPLACEMENTS = {
     os.sep: "_",
 }
-FN_ALLOWED = "_-.()" + string.digits + string.ascii_letters
+FN_ALLOWED = f"_-.(){string.digits}{string.ascii_letters}"
 
 TRUE_STRINGS = ("true", "1", "on", "yes")
 FALSE_STRINGS = ("off", "0", "no", "false")
@@ -107,23 +107,19 @@ def lsb_release(target=None):
 
     except subp.ProcessExecutionError as err:
         LOG.warning("Unable to get lsb_release --all: %s", err)
-        data = dict((v, "UNAVAILABLE") for v in fmap.values())
+        data = {v: "UNAVAILABLE" for v in fmap.values()}
 
     return data
 
 
 def decode_binary(blob, encoding="utf-8"):
     # Converts a binary type into a text type using given encoding.
-    if isinstance(blob, str):
-        return blob
-    return blob.decode(encoding)
+    return blob if isinstance(blob, str) else blob.decode(encoding)
 
 
 def encode_text(text, encoding="utf-8"):
     # Converts a text string into a binary type using given encoding.
-    if isinstance(text, bytes):
-        return text
-    return text.encode(encoding)
+    return text if isinstance(text, bytes) else text.encode(encoding)
 
 
 def b64d(source):
@@ -155,10 +151,7 @@ def fully_decoded_payload(part):
         cte_payload, bytes
     ):
         charset = part.get_charset()
-        if charset and charset.input_codec:
-            encoding = charset.input_codec
-        else:
-            encoding = "utf-8"
+        encoding = charset.input_codec if charset and charset.input_codec else "utf-8"
         return cte_payload.decode(encoding, "surrogateescape")
     return cte_payload
 
@@ -175,10 +168,7 @@ class SeLinuxGuard(object):
         self.recursive = recursive
 
     def __enter__(self):
-        if self.selinux and self.selinux.is_selinux_enabled():
-            return True
-        else:
-            return False
+        return bool(self.selinux and self.selinux.is_selinux_enabled())
 
     def __exit__(self, excp_type, excp_value, excp_traceback):
         if not self.selinux or not self.selinux.is_selinux_enabled():
@@ -244,9 +234,7 @@ def is_true(val, addons=None):
     check_set = TRUE_STRINGS
     if addons:
         check_set = list(check_set) + addons
-    if str(val).lower().strip() in check_set:
-        return True
-    return False
+    return str(val).lower().strip() in check_set
 
 
 def is_false(val, addons=None):
@@ -255,9 +243,7 @@ def is_false(val, addons=None):
     check_set = FALSE_STRINGS
     if addons:
         check_set = list(check_set) + addons
-    if str(val).lower().strip() in check_set:
-        return True
-    return False
+    return str(val).lower().strip() in check_set
 
 
 def translate_bool(val, addons=None):
@@ -266,23 +252,21 @@ def translate_bool(val, addons=None):
         # other things that python believes are false
         return False
     # If its already a boolean skip
-    if isinstance(val, (bool)):
-        return val
-    return is_true(val, addons)
+    return val if isinstance(val, (bool)) else is_true(val, addons)
 
 
 def rand_str(strlen=32, select_from=None):
     r = random.SystemRandom()
     if not select_from:
         select_from = string.ascii_letters + string.digits
-    return "".join([r.choice(select_from) for _x in range(0, strlen)])
+    return "".join([r.choice(select_from) for _x in range(strlen)])
 
 
 def rand_dict_key(dictionary, postfix=None):
     if not postfix:
         postfix = ""
     while True:
-        newkey = rand_str(strlen=8) + "_" + postfix
+        newkey = f"{rand_str(strlen=8)}_{postfix}"
         if newkey not in dictionary:
             break
     return newkey
@@ -327,10 +311,7 @@ def uniq_merge(*lists):
 def clean_filename(fn):
     for (k, v) in FN_REPLACEMENTS.items():
         fn = fn.replace(k, v)
-    removals = []
-    for k in fn:
-        if k not in FN_ALLOWED:
-            removals.append(k)
+    removals = [k for k in fn if k not in FN_ALLOWED]
     for k in removals:
         fn = fn.replace(k, "")
     fn = fn.strip()
@@ -342,10 +323,7 @@ def decomp_gzip(data, quiet=True, decode=True):
         buf = io.BytesIO(encode_text(data))
         with contextlib.closing(gzip.GzipFile(None, "rb", 1, buf)) as gh:
             # E1101 is https://github.com/PyCQA/pylint/issues/1444
-            if decode:
-                return decode_binary(gh.read())  # pylint: disable=E1101
-            else:
-                return gh.read()  # pylint: disable=E1101
+            return decode_binary(gh.read()) if decode else gh.read()
     except Exception as e:
         if quiet:
             return data
@@ -358,10 +336,7 @@ def extract_usergroup(ug_pair):
         return (None, None)
     ug_parted = ug_pair.split(":", 1)
     u = ug_parted[0].strip()
-    if len(ug_parted) == 2:
-        g = ug_parted[1].strip()
-    else:
-        g = None
+    g = ug_parted[1].strip() if len(ug_parted) == 2 else None
     if not u or u == "-1" or u.lower() == "none":
         u = None
     if not g or g == "-1" or g.lower() == "none":
@@ -370,11 +345,11 @@ def extract_usergroup(ug_pair):
 
 
 def find_modules(root_dir) -> dict:
-    entries = dict()
+    entries = {}
     for fname in glob.glob(os.path.join(root_dir, "*.py")):
         if not os.path.isfile(fname):
             continue
-        modname = os.path.basename(fname)[0:-3]
+        modname = os.path.basename(fname)[:-3]
         modname = modname.strip()
         if modname and modname.find(".") == -1:
             entries[fname] = modname
@@ -421,11 +396,7 @@ def is_Linux():
 
 @lru_cache()
 def is_BSD():
-    if "BSD" in platform.system():
-        return True
-    if platform.system() == "DragonFly":
-        return True
-    return False
+    return True if "BSD" in platform.system() else platform.system() == "DragonFly"
 
 
 @lru_cache()
@@ -449,9 +420,7 @@ def is_OpenBSD():
 
 
 def get_cfg_option_bool(yobj, key, default=False):
-    if key not in yobj:
-        return default
-    return translate_bool(yobj[key])
+    return default if key not in yobj else translate_bool(yobj[key])
 
 
 def get_cfg_option_str(yobj, key, default=None):
@@ -488,8 +457,7 @@ def _parse_redhat_release(release_file=None):
     if "Virtuozzo" in redhat_release:
         redhat_regex = r"(?P<name>.+) release (?P<version>[\d\.]+)"
 
-    match = re.match(redhat_regex, redhat_release)
-    if match:
+    if match := re.match(redhat_regex, redhat_release):
         group = match.groupdict()
 
         # Virtuozzo has no codename in this file
@@ -528,19 +496,19 @@ def get_linux_distro():
             # which will include both version codename and architecture
             # on all distributions.
             flavor = platform.machine()
-        elif distro_name == "photon":
-            flavor = os_release.get("PRETTY_NAME", "")
-        elif distro_name == "virtuozzo" and not os_release_rhel:
-            # Only use this if the redhat file is not parsed
+        elif (
+            distro_name == "photon"
+            or distro_name == "virtuozzo"
+            and not os_release_rhel
+        ):
             flavor = os_release.get("PRETTY_NAME", "")
         else:
             flavor = os_release.get("VERSION_CODENAME", "")
             if not flavor:
-                match = re.match(
+                if match := re.match(
                     r"[^ ]+ \((?P<codename>[^)]+)\)",
                     os_release.get("VERSION", ""),
-                )
-                if match:
+                ):
                     flavor = match.groupdict()["codename"]
         if distro_name == "rhel":
             distro_name = "redhat"
@@ -651,8 +619,7 @@ def get_cfg_option_list(yobj, key, default=None):
         return []
     val = yobj[key]
     if isinstance(val, (list)):
-        cval = [v for v in val]
-        return cval
+        return list(val)
     if not isinstance(val, str):
         val = str(val)
     return [val]
@@ -737,7 +704,7 @@ def redirect_output(outfmt, errfmt, o_out=None, o_err=None):
     if outfmt:
         LOG.debug("Redirecting %s to %s", o_out, outfmt)
         (mode, arg) = outfmt.split(" ", 1)
-        if mode == ">" or mode == ">>":
+        if mode in [">", ">>"]:
             owith = "ab"
             if mode == ">":
                 owith = "wb"
@@ -751,7 +718,7 @@ def redirect_output(outfmt, errfmt, o_out=None, o_err=None):
             )
             new_fp = proc.stdin
         else:
-            raise TypeError("Invalid type for output format: %s" % outfmt)
+            raise TypeError(f"Invalid type for output format: {outfmt}")
 
         if o_out:
             os.dup2(new_fp.fileno(), o_out.fileno())
@@ -764,7 +731,7 @@ def redirect_output(outfmt, errfmt, o_out=None, o_err=None):
     if errfmt:
         LOG.debug("Redirecting %s to %s", o_err, errfmt)
         (mode, arg) = errfmt.split(" ", 1)
-        if mode == ">" or mode == ">>":
+        if mode in [">", ">>"]:
             owith = "ab"
             if mode == ">":
                 owith = "wb"
@@ -778,7 +745,7 @@ def redirect_output(outfmt, errfmt, o_out=None, o_err=None):
             )
             new_fp = proc.stdin
         else:
-            raise TypeError("Invalid type for error format: %s" % errfmt)
+            raise TypeError(f"Invalid type for error format: {errfmt}")
 
         if o_err:
             os.dup2(new_fp.fileno(), o_err.fileno())
@@ -790,12 +757,9 @@ def make_url(
 
     pieces = [scheme or ""]
 
-    netloc = ""
-    if host:
-        netloc = str(host)
-
+    netloc = str(host) if host else ""
     if port is not None:
-        netloc += ":" + "%s" % (port)
+        netloc += ":" + f"{port}"
 
     pieces.append(netloc or "")
     pieces.append(path or "")
@@ -884,21 +848,28 @@ def fetch_ssl_details(paths=None):
         )
     ssl_cert_paths = uniq_merge(ssl_cert_paths)
     ssl_cert_paths = [d for d in ssl_cert_paths if d and os.path.isdir(d)]
-    cert_file = None
-    for d in ssl_cert_paths:
-        if os.path.isfile(os.path.join(d, "cert.pem")):
-            cert_file = os.path.join(d, "cert.pem")
-            break
-    key_file = None
-    for d in ssl_cert_paths:
-        if os.path.isfile(os.path.join(d, "key.pem")):
-            key_file = os.path.join(d, "key.pem")
-            break
-    if cert_file and key_file:
+    cert_file = next(
+        (
+            os.path.join(d, "cert.pem")
+            for d in ssl_cert_paths
+            if os.path.isfile(os.path.join(d, "cert.pem"))
+        ),
+        None,
+    )
+
+    key_file = next(
+        (
+            os.path.join(d, "key.pem")
+            for d in ssl_cert_paths
+            if os.path.isfile(os.path.join(d, "key.pem"))
+        ),
+        None,
+    )
+
+    if cert_file:
         ssl_details["cert_file"] = cert_file
-        ssl_details["key_file"] = key_file
-    elif cert_file:
-        ssl_details["cert_file"] = cert_file
+        if key_file:
+            ssl_details["key_file"] = key_file
     return ssl_details
 
 
@@ -919,9 +890,9 @@ def load_yaml(blob, default=None, allowed=(dict,)):
         elif not isinstance(converted, allowed):
             # Yes this will just be caught, but thats ok for now...
             raise TypeError(
-                "Yaml load allows %s root types, but got %s instead"
-                % (allowed, type_utils.obj_name(converted))
+                f"Yaml load allows {allowed} root types, but got {type_utils.obj_name(converted)} instead"
             )
+
         loaded = converted
     except (safeyaml.YAMLError, TypeError, ValueError) as e:
         msg = "Failed loading yaml blob"
@@ -944,13 +915,13 @@ def load_yaml(blob, default=None, allowed=(dict,)):
 
 def read_seeded(base="", ext="", timeout=5, retries=10, file_retries=0):
     if base.find("%s") >= 0:
-        ud_url = base % ("user-data" + ext)
-        vd_url = base % ("vendor-data" + ext)
-        md_url = base % ("meta-data" + ext)
+        ud_url = base % f"user-data{ext}"
+        vd_url = base % f"vendor-data{ext}"
+        md_url = base % f"meta-data{ext}"
     else:
-        ud_url = "%s%s%s" % (base, "user-data", ext)
-        vd_url = "%s%s%s" % (base, "vendor-data", ext)
-        md_url = "%s%s%s" % (base, "meta-data", ext)
+        ud_url = f"{base}user-data{ext}"
+        vd_url = f"{base}vendor-data{ext}"
+        md_url = f"{base}meta-data{ext}"
 
     md_resp = url_helper.read_file_or_url(
         md_url, timeout=timeout, retries=retries
@@ -962,10 +933,7 @@ def read_seeded(base="", ext="", timeout=5, retries=10, file_retries=0):
     ud_resp = url_helper.read_file_or_url(
         ud_url, timeout=timeout, retries=retries
     )
-    ud = None
-    if ud_resp.ok():
-        ud = ud_resp.contents
-
+    ud = ud_resp.contents if ud_resp.ok() else None
     vd = None
     try:
         vd_resp = url_helper.read_file_or_url(
@@ -993,10 +961,7 @@ def read_conf_d(confd):
     confs = [f for f in confs if os.path.isfile(os.path.join(confd, f))]
 
     # Load them all so that they can be merged
-    cfgs = []
-    for fn in confs:
-        cfgs.append(read_conf(os.path.join(confd, fn)))
-
+    cfgs = [read_conf(os.path.join(confd, fn)) for fn in confs]
     return mergemanydict(cfgs)
 
 
@@ -1014,8 +979,8 @@ def read_conf_with_confd(cfgfile):
                 )
             else:
                 confd = str(confd).strip()
-    elif os.path.isdir("%s.d" % cfgfile):
-        confd = "%s.d" % cfgfile
+    elif os.path.isdir(f"{cfgfile}.d"):
+        confd = f"{cfgfile}.d"
 
     if not confd or not os.path.isdir(confd):
         return cfg
@@ -1086,20 +1051,21 @@ def get_hostname_fqdn(cfg, cloud, metadata_only=False):
         # user specified a fqdn.  Default hostname then is based off that
         fqdn = cfg["fqdn"]
         hostname = get_cfg_option_str(cfg, "hostname", fqdn.split(".")[0])
+    elif "hostname" in cfg and cfg["hostname"].find(".") > 0:
+        # user specified hostname, and it had '.' in it
+        # be nice to them.  set fqdn and hostname from that
+        fqdn = cfg["hostname"]
+        hostname = cfg["hostname"][: fqdn.find(".")]
     else:
-        if "hostname" in cfg and cfg["hostname"].find(".") > 0:
-            # user specified hostname, and it had '.' in it
-            # be nice to them.  set fqdn and hostname from that
-            fqdn = cfg["hostname"]
-            hostname = cfg["hostname"][: fqdn.find(".")]
-        else:
-            # no fqdn set, get fqdn from cloud.
-            # get hostname from cfg if available otherwise cloud
-            fqdn = cloud.get_hostname(fqdn=True, metadata_only=metadata_only)
-            if "hostname" in cfg:
-                hostname = cfg["hostname"]
-            else:
-                hostname = cloud.get_hostname(metadata_only=metadata_only)
+        # no fqdn set, get fqdn from cloud.
+        # get hostname from cfg if available otherwise cloud
+        fqdn = cloud.get_hostname(fqdn=True, metadata_only=metadata_only)
+        hostname = (
+            cfg["hostname"]
+            if "hostname" in cfg
+            else cloud.get_hostname(metadata_only=metadata_only)
+        )
+
     return (hostname, fqdn)
 
 
@@ -1119,11 +1085,11 @@ def get_fqdn_from_hosts(hostname, filename="/etc/hosts"):
       hostnames, or generic hostnames (for example, localhost).
     """
     fqdn = None
-    try:
+    with contextlib.suppress(IOError):
         for line in load_file(filename).splitlines():
             hashpos = line.find("#")
             if hashpos >= 0:
-                line = line[0:hashpos]
+                line = line[:hashpos]
             line = line.strip()
             if not line:
                 continue
@@ -1138,8 +1104,6 @@ def get_fqdn_from_hosts(hostname, filename="/etc/hosts"):
             if hostname in toks[2:]:
                 fqdn = toks[1]
                 break
-    except IOError:
-        pass
     return fqdn
 
 
@@ -1165,16 +1129,14 @@ def is_resolvable(name):
         )
         badresults = {}
         for iname in badnames:
-            try:
+            with contextlib.suppress(socket.gaierror, socket.error):
                 result = socket.getaddrinfo(
                     iname, None, 0, 0, socket.SOCK_STREAM, socket.AI_CANONNAME
                 )
                 badresults[iname] = []
-                for (_fam, _stype, _proto, cname, sockaddr) in result:
-                    badresults[iname].append("%s: %s" % (cname, sockaddr[0]))
+                for _fam, _stype, _proto, cname, sockaddr in result:
+                    badresults[iname].append(f"{cname}: {sockaddr[0]}")
                     badips.add(sockaddr[0])
-            except (socket.gaierror, socket.error):
-                pass
         _DNS_REDIRECT_IP = badips
         if badresults:
             LOG.debug("detected dns redirection: %s", badresults)
@@ -1183,16 +1145,13 @@ def is_resolvable(name):
         result = socket.getaddrinfo(name, None)
         # check first result's sockaddr field
         addr = result[0][4][0]
-        if addr in _DNS_REDIRECT_IP:
-            return False
-        return True
+        return addr not in _DNS_REDIRECT_IP
     except (socket.gaierror, socket.error):
         return False
 
 
 def get_hostname():
-    hostname = socket.gethostname()
-    return hostname
+    return socket.gethostname()
 
 
 def gethostbyaddr(ip):
@@ -1206,7 +1165,7 @@ def is_resolvable_url(url):
     """determine if this url is resolvable (existing or ip)."""
     return log_time(
         logfunc=LOG.debug,
-        msg="Resolving URL: " + url,
+        msg=f"Resolving URL: {url}",
         func=is_resolvable,
         args=(parse.urlparse(url).hostname,),
     )
@@ -1222,12 +1181,10 @@ def search_for_mirror(candidates):
 
     LOG.debug("search for mirror in candidates: '%s'", candidates)
     for cand in candidates:
-        try:
+        with contextlib.suppress(Exception):
             if is_resolvable_url(cand):
                 LOG.debug("found working mirror: '%s'", cand)
                 return cand
-        except Exception:
-            pass
     return None
 
 
@@ -1255,9 +1212,10 @@ def find_devs_with_freebsd(
         label = criteria.lstrip("LABEL=")
         devlist = [
             p
-            for p in ["/dev/msdosfs/" + label, "/dev/iso9660/" + label]
+            for p in [f"/dev/msdosfs/{label}", f"/dev/iso9660/{label}"]
             if os.path.exists(p)
         ]
+
     elif criteria == "TYPE=vfat":
         devlist = glob.glob("/dev/msdosfs/*")
     elif criteria == "TYPE=iso9660":
@@ -1280,13 +1238,13 @@ def find_devs_with_netbsd(
     for dev in out.split():
         if label or _type:
             mscdlabel_out, _ = subp.subp(["mscdlabel", dev], rcs=[0, 1])
-        if label and not ('label "%s"' % label) in mscdlabel_out:
+        if label and 'label "%s"' % label not in mscdlabel_out:
             continue
         if _type == "iso9660" and "ISO filesystem" not in mscdlabel_out:
             continue
         if _type == "vfat" and "ISO filesystem" in mscdlabel_out:
             continue
-        devlist.append("/dev/" + dev)
+        devlist.append(f"/dev/{dev}")
     return devlist
 
 
@@ -1301,10 +1259,10 @@ def find_devs_with_openbsd(
             continue
         if entry == "fd0:":
             continue
-        devlist.append(entry[:-1] + "a")
+        devlist.append(f"{entry[:-1]}a")
         if not entry.startswith("cd"):
-            devlist.append(entry[:-1] + "i")
-    return ["/dev/" + i for i in devlist]
+            devlist.append(f"{entry[:-1]}i")
+    return [f"/dev/{i}" for i in devlist]
 
 
 def find_devs_with_dragonflybsd(
@@ -1329,7 +1287,7 @@ def find_devs_with_dragonflybsd(
         ]
     elif criteria:
         LOG.debug("Unexpected criteria: %s", criteria)
-    return ["/dev/" + i for i in devlist]
+    return [f"/dev/{i}" for i in devlist]
 
 
 def find_devs_with(
@@ -1362,10 +1320,10 @@ def find_devs_with(
         # If there are no devices specified on the command line,
         # all block devices will be searched; otherwise,
         # only search the devices specified by the user.
-        options.append("-t%s" % (criteria))
+        options.append(f"-t{criteria}")
     if tag:
         # For each (specified) device, show only the tags that match tag.
-        options.append("-s%s" % (tag))
+        options.append(f"-s{tag}")
     if no_cache:
         # If you want to start with a clean cache
         # (i.e. don't report devices previously scanned
@@ -1375,7 +1333,7 @@ def find_devs_with(
         # Display blkid's output using the specified format.
         # The format parameter may be:
         # full, value, list, device, udev, export
-        options.append("-o%s" % (oformat))
+        options.append(f"-o{oformat}")
     if path:
         options.append(path)
     cmd = blk_id_cmd + options
@@ -1390,8 +1348,7 @@ def find_devs_with(
             raise
     entries = []
     for line in out.splitlines():
-        line = line.strip()
-        if line:
+        if line := line.strip():
             entries.append(line)
     return entries
 
@@ -1404,11 +1361,7 @@ def blkid(devs=None, disable_cache=False):
 
     @return: Dict of key value pairs of info for the device.
     """
-    if devs is None:
-        devs = []
-    else:
-        devs = list(devs)
-
+    devs = [] if devs is None else list(devs)
     cmd = ["blkid", "-o", "full"]
     if disable_cache:
         cmd.extend(["-c", "/dev/null"])
@@ -1456,10 +1409,7 @@ def load_file(fname, read_cb=None, quiet=False, decode=True):
             raise
     contents = ofh.getvalue()
     LOG.debug("Read %s bytes from %s", len(contents), fname)
-    if decode:
-        return decode_binary(contents)
-    else:
-        return contents
+    return decode_binary(contents) if decode else contents
 
 
 @lru_cache()
@@ -1494,11 +1444,10 @@ def pipe_in_out(in_fh, out_fh, chunk_size=1024, chunk_cb=None):
         data = in_fh.read(chunk_size)
         if len(data) == 0:
             break
-        else:
-            out_fh.write(data)
-            bytes_piped += len(data)
-            if chunk_cb:
-                chunk_cb(bytes_piped)
+        out_fh.write(data)
+        bytes_piped += len(data)
+        if chunk_cb:
+            chunk_cb(bytes_piped)
     out_fh.flush()
     return bytes_piped
 
@@ -1520,7 +1469,7 @@ def chownbyname(fname, user=None, group=None):
         if group:
             gid = grp.getgrnam(group).gr_gid
     except KeyError as e:
-        raise OSError("Unknown user or group: %s" % (e)) from e
+        raise OSError(f"Unknown user or group: {e}") from e
     chownbyid(fname, uid, gid)
 
 
@@ -1541,13 +1490,13 @@ def get_output_cfg(cfg, mode):
     outcfg = cfg["output"]
     if mode in outcfg:
         modecfg = outcfg[mode]
-    else:
-        if "all" not in outcfg:
-            return ret
+    elif "all" in outcfg:
         # if there is a 'all' item in the output list
         # then it applies to all users of this (init, config, final)
         modecfg = outcfg["all"]
 
+    else:
+        return ret
     # if value is a string, it specifies stdout and stderr
     if isinstance(modecfg, str):
         ret = [modecfg, modecfg]
@@ -1580,12 +1529,12 @@ def get_output_cfg(cfg, mode):
         found = False
         for s in swlist:
             if val.startswith(s):
-                val = "%s %s" % (s, val[len(s) :].strip())
+                val = f"{s} {val[len(s) :].strip()}"
                 found = True
                 break
         if not found:
             # default behavior is append
-            val = "%s %s" % (">>", val.strip())
+            val = f">> {val.strip()}"
         ret[i] = val
 
     return ret
@@ -1599,8 +1548,7 @@ def get_config_logfiles(cfg):
     logs = []
     if not cfg or not isinstance(cfg, dict):
         return logs
-    default_log = cfg.get("def_log_file")
-    if default_log:
+    if default_log := cfg.get("def_log_file"):
         logs.append(default_log)
     for fmt in get_output_cfg(cfg, None):
         if not fmt:
@@ -1608,7 +1556,7 @@ def get_config_logfiles(cfg):
         match = re.match(r"(?P<type>\||>+)\s*(?P<target>.*)", fmt)
         if not match:
             continue
-        target = match.group("target")
+        target = match["target"]
         parts = target.split()
         if len(parts) == 1:
             logs.append(target)
@@ -1640,10 +1588,7 @@ def hash_blob(blob, routine, mlen=None):
     hasher.update(encode_text(blob))
     digest = hasher.hexdigest()
     # Don't get to long now
-    if mlen is not None:
-        return digest[0:mlen]
-    else:
-        return digest
+    return digest[:mlen] if mlen is not None else digest
 
 
 def is_user(name):
@@ -1678,9 +1623,9 @@ def load_json(text, root_types=(dict,)):
     if not isinstance(decoded, tuple(root_types)):
         expected_types = ", ".join([str(t) for t in root_types])
         raise TypeError(
-            "(%s) root types expected, got %s instead"
-            % (expected_types, type(decoded))
+            f"({expected_types}) root types expected, got {type(decoded)} instead"
         )
+
     return decoded
 
 
@@ -1730,10 +1675,7 @@ def ensure_dir(path, mode=None):
         # Make the dir and adjust the mode
         with SeLinuxGuard(os.path.dirname(path), recursive=True):
             os.makedirs(path)
-        chmod(path, mode)
-    else:
-        # Just adjust the mode
-        chmod(path, mode)
+    chmod(path, mode)
 
 
 @contextlib.contextmanager
@@ -1766,10 +1708,10 @@ def mounts():
                     (dev, mp, fstype, opts, _freq, _passno) = mpline.split()
                 else:
                     m = re.search(mountre, mpline)
-                    dev = m.group(1)
-                    mp = m.group(2)
-                    fstype = m.group(3)
-                    opts = m.group(4)
+                    dev = m[1]
+                    mp = m[2]
+                    fstype = m[3]
+                    opts = m[4]
             except Exception:
                 continue
             # If the name of the mount point contains spaces these
@@ -1840,8 +1782,7 @@ def mount_cb(
                     mountcmd = ["mount", "-o", "ro"]
                     if mtype:
                         mountcmd.extend(["-t", mtype])
-                    mountcmd.append(device)
-                    mountcmd.append(tmpd)
+                    mountcmd.extend((device, tmpd))
                     subp.subp(mountcmd, update_env=update_env_for_mount)
                     umount = tmpd  # This forces it to be unmounted (when set)
                     mountpoint = tmpd
@@ -1859,19 +1800,15 @@ def mount_cb(
                     failure_reason = exc
             if not mountpoint:
                 raise MountFailedError(
-                    "Failed mounting %s to %s due to: %s"
-                    % (device, tmpd, failure_reason)
+                    f"Failed mounting {device} to {tmpd} due to: {failure_reason}"
                 )
+
 
         # Be nice and ensure it ends with a slash
         if not mountpoint.endswith("/"):
             mountpoint += "/"
         with unmounter(umount):
-            if data is None:
-                ret = callback(mountpoint)
-            else:
-                ret = callback(mountpoint, data)
-            return ret
+            return callback(mountpoint) if data is None else callback(mountpoint, data)
 
 
 def get_builtin_cfg():
@@ -1954,8 +1891,7 @@ def uptime():
     try:
         if os.path.exists("/proc/uptime"):
             method = "/proc/uptime"
-            contents = load_file("/proc/uptime")
-            if contents:
+            if contents := load_file("/proc/uptime"):
                 uptime_str = contents.split()[0]
         else:
             method = "ctypes"
@@ -1963,7 +1899,7 @@ def uptime():
             uptime_str = str(time.time() - boottime())
 
     except Exception:
-        logexc(LOG, "Unable to read uptime using method: %s" % method)
+        logexc(LOG, f"Unable to read uptime using method: {method}")
     return uptime_str
 
 
@@ -2044,10 +1980,9 @@ def get_user_groups(username: str) -> List[str]:
 
     @param username: the user we want to check
     """
-    groups = []
-    for group in grp.getgrall():
-        if username in group.gr_mem:
-            groups.append(group.gr_name)
+    groups = [
+        group.gr_name for group in grp.getgrall() if username in group.gr_mem
+    ]
 
     gid = pwd.getpwnam(username).pw_gid
     groups.append(grp.getgrgid(gid).gr_name)
@@ -2079,11 +2014,8 @@ def write_file(
     """
 
     if preserve_mode:
-        try:
+        with contextlib.suppress(OSError):
             mode = get_permissions(filename)
-        except OSError:
-            pass
-
     if ensure_dir_exists:
         ensure_dir(os.path.dirname(filename))
     if "b" in omode.lower():
@@ -2128,8 +2060,8 @@ def delete_dir_contents(dirname):
 def make_header(comment_char="#", base="created"):
     ci_ver = version.version_string()
     header = str(comment_char)
-    header += " %s by cloud-init v. %s" % (base.title(), ci_ver)
-    header += " on %s" % time_rfc2822()
+    header += f" {base.title()} by cloud-init v. {ci_ver}"
+    header += f" on {time_rfc2822()}"
     return header
 
 
@@ -2157,18 +2089,13 @@ def shellify(cmdlist, add_header=True):
         # If the item is a list, wrap all items in single tick.
         # If its not, then just write it directly.
         if isinstance(args, (list, tuple)):
-            fixed = []
-            for f in args:
-                fixed.append("'%s'" % (str(f).replace("'", escaped)))
+            fixed = ["'%s'" % (str(f).replace("'", escaped)) for f in args]
             content = "%s%s\n" % (content, " ".join(fixed))
             cmds_made += 1
         elif isinstance(args, str):
             content = "%s%s\n" % (content, args)
             cmds_made += 1
-        # Yaml parsing of a comment results in None
-        elif args is None:
-            pass
-        else:
+        elif args is not None:
             raise TypeError(
                 "Unable to shellify type '%s'. Expected list, string, tuple. "
                 "Got: %s" % (type_utils.obj_name(args), args)
@@ -2236,7 +2163,7 @@ def is_container():
 
     # this code is largely from the logic in
     # ubuntu's /etc/init/container-detect.conf
-    try:
+    with contextlib.suppress(IOError, OSError):
         # Detect old-style libvirt
         # Detect OpenVZ containers
         pid1env = get_proc_env(1)
@@ -2244,14 +2171,11 @@ def is_container():
             return True
         if "LIBVIRT_LXC_UUID" in pid1env:
             return True
-    except (IOError, OSError):
-        pass
-
     # Detect OpenVZ containers
     if os.path.isdir("/proc/vz") and not os.path.isdir("/proc/bc"):
         return True
 
-    try:
+    with contextlib.suppress(IOError, OSError):
         # Detect Vserver containers
         lines = load_file("/proc/self/status").splitlines()
         for line in lines:
@@ -2259,9 +2183,6 @@ def is_container():
                 (_key, val) = line.strip().split(":", 1)
                 if val != "0":
                     return True
-    except (IOError, OSError):
-        pass
-
     return False
 
 
@@ -2316,7 +2237,7 @@ def is_partition(device):
     if device.startswith("/dev/"):
         device = device[5:]
 
-    return os.path.isfile("/sys/class/block/%s/partition" % device)
+    return os.path.isfile(f"/sys/class/block/{device}/partition")
 
 
 def expand_package_list(version_fmt, pkgs):
@@ -2330,18 +2251,17 @@ def expand_package_list(version_fmt, pkgs):
             pkglist.append(pkg)
             continue
 
-        if isinstance(pkg, (tuple, list)):
-            if len(pkg) < 1 or len(pkg) > 2:
-                raise RuntimeError("Invalid package & version tuple.")
-
-            if len(pkg) == 2 and pkg[1]:
-                pkglist.append(version_fmt % tuple(pkg))
-                continue
-
-            pkglist.append(pkg[0])
-
-        else:
+        if not isinstance(pkg, (tuple, list)):
             raise RuntimeError("Invalid package type.")
+
+        if len(pkg) < 1 or len(pkg) > 2:
+            raise RuntimeError("Invalid package & version tuple.")
+
+        if len(pkg) == 2 and pkg[1]:
+            pkglist.append(version_fmt % tuple(pkg))
+            continue
+
+        pkglist.append(pkg[0])
 
     return pkglist
 
@@ -2379,7 +2299,7 @@ def parse_mount_info(path, mountinfo_lines, log=LOG, get_mnt_opts=False):
 
         # Ignore mounts where the common path is not the same.
         x = min(len(mount_point_elements), len(path_elements))
-        if mount_point_elements[0:x] != path_elements[0:x]:
+        if mount_point_elements[:x] != path_elements[:x]:
             continue
 
         # Ignore mount points higher than an already seen mount
@@ -2417,9 +2337,8 @@ def parse_mount_info(path, mountinfo_lines, log=LOG, get_mnt_opts=False):
     if get_mnt_opts:
         if devpth and fs_type and match_mount_point and mount_options:
             return (devpth, fs_type, match_mount_point, mount_options)
-    else:
-        if devpth and fs_type and match_mount_point:
-            return (devpth, fs_type, match_mount_point)
+    elif devpth and fs_type and match_mount_point:
+        return (devpth, fs_type, match_mount_point)
 
     return None
 
@@ -2479,7 +2398,7 @@ def get_mount_info_freebsd(path):
         result = path_found
     ret = result.split()
     label_part = find_freebsd_part(ret[0])
-    return "/dev/" + label_part, ret[2], ret[1]
+    return f"/dev/{label_part}", ret[2], ret[1]
 
 
 def get_device_info_from_zpool(zpool):
@@ -2522,13 +2441,13 @@ def parse_mount(path):
         m = re.search(regex, line)
         if not m:
             continue
-        devpth = m.group(1)
-        mount_point = m.group(2)
+        devpth = m[1]
+        mount_point = m[2]
         # above regex will either fill the fs_type in group(3)
         # or group(4) depending on the format we have.
-        fs_type = m.group(3)
+        fs_type = m[3]
         if fs_type is None:
-            fs_type = m.group(4)
+            fs_type = m[4]
         LOG.debug(
             "found line in mount -> devpth: %s, mount_point: %s, fs_type: %s",
             devpth,
@@ -2577,7 +2496,7 @@ def get_mount_info(path, log=LOG, get_mnt_opts=False):
     #
     # So use /proc/$$/mountinfo to find the device underlying the
     # input path.
-    mountinfo_path = "/proc/%s/mountinfo" % os.getpid()
+    mountinfo_path = f"/proc/{os.getpid()}/mountinfo"
     if os.path.exists(mountinfo_path):
         lines = load_file(mountinfo_path).splitlines()
         return parse_mount_info(path, lines, log, get_mnt_opts)
@@ -2597,41 +2516,27 @@ def log_time(logfunc, msg, func, args=None, kwargs=None, get_uptime=False):
 
     ustart = None
     if get_uptime:
-        try:
+        with contextlib.suppress(ValueError):
             ustart = float(uptime())
-        except ValueError:
-            pass
-
     try:
         ret = func(*args, **kwargs)
     finally:
         delta = time.time() - start
         udelta = None
         if ustart is not None:
-            try:
+            with contextlib.suppress(ValueError):
                 udelta = float(uptime()) - ustart
-            except ValueError:
-                pass
-
         tmsg = " took %0.3f seconds" % delta
         if get_uptime:
-            if isinstance(udelta, (float)):
-                tmsg += " (%0.2f)" % udelta
-            else:
-                tmsg += " (N/A)"
-        try:
+            tmsg += " (%0.2f)" % udelta if isinstance(udelta, (float)) else " (N/A)"
+        with contextlib.suppress(Exception):
             logfunc(msg + tmsg)
-        except Exception:
-            pass
     return ret
 
 
 def expand_dotted_devname(dotted):
     toks = dotted.rsplit(".", 1)
-    if len(toks) > 1:
-        return toks
-    else:
-        return (dotted, None)
+    return toks if len(toks) > 1 else (dotted, None)
 
 
 def pathprefix2dict(base, required=None, optional=None, delim=os.path.sep):
@@ -2701,7 +2606,7 @@ def human2bytes(size):
     for m in mpliers:
         if size.endswith(m):
             mplier = m
-            num = size[0 : -len(m)]
+            num = size[:-len(m)]
 
     try:
         num = float(num)
@@ -2718,10 +2623,9 @@ def is_x86(uname_arch=None):
     """Return True if platform is x86-based"""
     if uname_arch is None:
         uname_arch = os.uname()[4]
-    x86_arch_match = uname_arch == "x86_64" or (
+    return uname_arch == "x86_64" or (
         uname_arch[0] == "i" and uname_arch[2:] == "86"
     )
-    return x86_arch_match
 
 
 def message_from_string(string):
@@ -2764,9 +2668,7 @@ def system_is_snappy():
     content = load_file("/etc/system-image/channel.ini", quiet=True)
     if "ubuntu-core" in content.lower():
         return True
-    if os.path.isdir("/etc/system-image/config.d/"):
-        return True
-    return False
+    return bool(os.path.isdir("/etc/system-image/config.d/"))
 
 
 def indent(text, prefix):

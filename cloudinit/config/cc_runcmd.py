@@ -107,7 +107,7 @@ def handle(name, cfg, cloud, log, _args):
         content = util.shellify(cmd)
         util.write_file(out_fn, content, 0o700)
     except Exception as e:
-        raise type(e)("Failed to shellify {} into file {}".format(cmd, out_fn))
+        raise type(e)(f"Failed to shellify {cmd} into file {out_fn}")
 
 
 # vi: ts=4 expandtab

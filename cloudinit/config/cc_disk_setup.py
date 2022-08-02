@@ -103,17 +103,18 @@ def handle(_name, cfg, cloud, log, _args):
         log.debug("Partitioning disks: %s", str(disk_setup))
         for disk, definition in disk_setup.items():
             if not isinstance(definition, dict):
-                log.warning("Invalid disk definition for %s" % disk)
+                log.warning(f"Invalid disk definition for {disk}")
                 continue
 
             try:
                 log.debug("Creating new partition table/disk")
                 util.log_time(
                     logfunc=LOG.debug,
-                    msg="Creating partition on %s" % disk,
+                    msg=f"Creating partition on {disk}",
                     func=mkpart,
                     args=(disk, definition),
                 )
+
             except Exception as e:
                 util.logexc(LOG, "Failed partitioning operation\n%s" % e)
 
@@ -123,7 +124,7 @@ def handle(_name, cfg, cloud, log, _args):
         update_fs_setup_devices(fs_setup, alias_to_device)
         for definition in fs_setup:
             if not isinstance(definition, dict):
-                log.warning("Invalid file system definition: %s" % definition)
+                log.warning(f"Invalid file system definition: {definition}")
                 continue
 
             try:
@@ -131,10 +132,11 @@ def handle(_name, cfg, cloud, log, _args):
                 device = definition.get("device")
                 util.log_time(
                     logfunc=LOG.debug,
-                    msg="Creating fs for %s" % device,
+                    msg=f"Creating fs for {device}",
                     func=mkfs,
                     args=(definition,),
                 )
+
             except Exception as e:
                 util.logexc(LOG, "Failed during filesystem operation\n%s" % e)
 
@@ -212,8 +214,7 @@ def value_splitter(values, start=None):
     if start:
         _values = _values[start:]
 
-    for key, value in [x.split("=") for x in _values]:
-        yield key, value
+    yield from [x.split("=") for x in _values]
 
 
 def enumerate_disk(device, nodeps=False):
@@ -271,10 +272,14 @@ def device_type(device):
     Return the device type of the device by calling lsblk.
     """
 
-    for d in enumerate_disk(device, nodeps=True):
-        if "type" in d:
-            return d["type"].lower()
-    return None
+    return next(
+        (
+            d["type"].lower()
+            for d in enumerate_disk(device, nodeps=True)
+            if "type" in d
+        ),
+        None,
+    )
 
 
 def is_device_valid(name, partition=False):
@@ -288,11 +293,9 @@ def is_device_valid(name, partition=False):
         LOG.warning("Query against device %s failed", name)
         return False
 
-    if partition and d_type == "part":
-        return True
-    elif not partition and d_type == "disk":
-        return True
-    return False
+    return bool(
+        partition and d_type == "part" or not partition and d_type == "disk"
+    )
 
 
 def check_fs(device):
@@ -314,15 +317,14 @@ def check_fs(device):
             "Failed during disk check for %s\n%s" % (device, e)
         ) from e
 
-    if out:
-        if len(out.splitlines()) == 1:
-            for key, value in value_splitter(out, start=1):
-                if key.lower() == "label":
-                    label = value
-                elif key.lower() == "type":
-                    fs_type = value
-                elif key.lower() == "uuid":
-                    uuid = value
+    if out and len(out.splitlines()) == 1:
+        for key, value in value_splitter(out, start=1):
+            if key.lower() == "label":
+                label = value
+            elif key.lower() == "type":
+                fs_type = value
+            elif key.lower() == "uuid":
+                uuid = value
 
     return label, fs_type, uuid
 
@@ -364,13 +366,13 @@ def find_device_node(
 
         if d["fstype"] == replace_fs and label_match is False:
             # We found a device where we want to replace the FS
-            return ("/dev/%s" % d["name"], False)
+            return f'/dev/{d["name"]}', False
 
         if d["fstype"] == fs_type and (
             (label_match and d["label"] == label) or not label_match
         ):
             # If we find a matching device, we return that
-            return ("/dev/%s" % d["name"], True)
+            return f'/dev/{d["name"]}', True
 
         if d["type"] in valid_targets:
 
@@ -382,7 +384,7 @@ def find_device_node(
                 pass
 
             elif not d["fstype"]:
-                return ("/dev/%s" % d["name"], False)
+                return f'/dev/{d["name"]}', False
 
     if not raw_device_used:
         return (device, False)
@@ -405,10 +407,7 @@ def is_disk_used(device):
 
     # If we see a file system, then its used
     _, check_fstype, _ = check_fs(device)
-    if check_fstype:
-        return True
-
-    return False
+    return bool(check_fstype)
 
 
 def get_dyn_func(*args):
@@ -429,13 +428,9 @@ def get_dyn_func(*args):
     func_args = args[2:]
 
     try:
-        if func_args:
-            return globals()[func_name](*func_args)
-        else:
-            return globals()[func_name]
-
+        return globals()[func_name](*func_args) if func_args else globals()[func_name]
     except KeyError as e:
-        raise Exception("No such function %s to call!" % func_name) from e
+        raise Exception(f"No such function {func_name} to call!") from e
 
 
 def get_hdd_size(device):
@@ -476,12 +471,14 @@ def check_partition_mbr_layout(device, layout):
             if _line[-1].lower() in ["extended", "empty"]:
                 continue
 
-            # Find the partition types
-            type_label = None
-            for x in sorted(range(1, len(_line)), reverse=True):
-                if _line[x].isdigit() and _line[x] != "/":
-                    type_label = _line[x]
-                    break
+            type_label = next(
+                (
+                    _line[x]
+                    for x in sorted(range(1, len(_line)), reverse=True)
+                    if _line[x].isdigit() and _line[x] != "/"
+                ),
+                None,
+            )
 
             found_layout.append(type_label)
     return found_layout
@@ -523,7 +520,7 @@ def check_partition_gpt_layout(device, layout):
     # user would expect a code '83' to be Linux, but sgdisk outputs 8300.
     for code in codes:
         if len(code) == 4 and code.endswith("00"):
-            code = code[0:2]
+            code = code[:2]
         cleaned.append(code)
     return cleaned
 
@@ -550,10 +547,7 @@ def check_partition_layout(table_type, device, layout):
     if isinstance(layout, bool):
         # if we are using auto partitioning, or "True" be happy
         # if a single partition exists.
-        if layout and len(found_layout) >= 1:
-            return True
-        return False
-
+        return bool(layout and len(found_layout) >= 1)
     elif len(found_layout) == len(layout):
         # This just makes sure that the number of requested
         # partitions and the type labels are right
@@ -563,10 +557,10 @@ def check_partition_layout(table_type, device, layout):
         LOG.debug(
             "Layout types=%s. Found types=%s", layout_types, found_layout
         )
-        for itype, ftype in zip(layout_types, found_layout):
-            if itype is not None and str(ftype) != str(itype):
-                return False
-        return True
+        return not any(
+            itype is not None and str(ftype) != str(itype)
+            for itype, ftype in zip(layout_types, found_layout)
+        )
 
     return False
 
@@ -598,23 +592,20 @@ def get_partition_mbr_layout(size, layout):
         raise Exception("Only simply partitioning is allowed.")
 
     part_definition = []
-    part_num = 0
-    for part in layout:
+    for part_num, part in enumerate(layout, start=1):
         part_type = 83  # Default to Linux
         percent = part
-        part_num += 1
-
         if isinstance(part, list):
             if len(part) != 2:
-                raise Exception("Partition was incorrectly defined: %s" % part)
+                raise Exception(f"Partition was incorrectly defined: {part}")
             percent, part_type = part
 
         part_size = int(float(size) * (float(percent) / 100))
 
         if part_num == last_part_num:
-            part_definition.append(",,%s" % part_type)
+            part_definition.append(f",,{part_type}")
         else:
-            part_definition.append(",%s,%s" % (part_size, part_type))
+            part_definition.append(f",{part_size},{part_type}")
 
     sfdisk_definition = "\n".join(part_definition)
     if len(part_definition) > 4:
@@ -634,16 +625,14 @@ def get_partition_gpt_layout(size, layout):
     for partition in layout:
         if isinstance(partition, list):
             if len(partition) != 2:
-                raise Exception(
-                    "Partition was incorrectly defined: %s" % partition
-                )
+                raise Exception(f"Partition was incorrectly defined: {partition}")
             percent, partition_type = partition
         else:
             percent = partition
             partition_type = None
 
         part_size = int(float(size) * (float(percent) / 100))
-        partition_specs.append((partition_type, [0, "+{}".format(part_size)]))
+        partition_specs.append((partition_type, [0, f"+{part_size}"]))
 
     # The last partition should use up all remaining space
     partition_specs[-1][-1][-1] = 0
@@ -673,14 +662,12 @@ def purge_disk(device):
     # wipe any file systems first
     for d in enumerate_disk(device):
         if d["type"] not in ["disk", "crypt"]:
-            wipefs_cmd = [WIPEFS_CMD, "--all", "/dev/%s" % d["name"]]
+            wipefs_cmd = [WIPEFS_CMD, "--all", f'/dev/{d["name"]}']
             try:
                 LOG.info("Purging filesystem on /dev/%s", d["name"])
                 subp.subp(wipefs_cmd)
             except Exception as e:
-                raise Exception(
-                    "Failed FS purge of /dev/%s" % d["name"]
-                ) from e
+                raise Exception(f'Failed FS purge of /dev/{d["name"]}') from e
 
     purge_disk_ptable(device)
 
@@ -710,7 +697,7 @@ def read_parttbl(device):
     try:
         subp.subp(probe_cmd)
     except Exception as e:
-        util.logexc(LOG, "Failed reading the partition table %s" % e)
+        util.logexc(LOG, f"Failed reading the partition table {e}")
 
     util.udevadm_settle()
 
@@ -737,21 +724,12 @@ def exec_mkpart_gpt(device, layout):
         subp.subp([SGDISK_CMD, "-Z", device])
         for index, (partition_type, (start, end)) in enumerate(layout):
             index += 1
-            subp.subp(
-                [
-                    SGDISK_CMD,
-                    "-n",
-                    "{}:{}:{}".format(index, start, end),
-                    device,
-                ]
-            )
+            subp.subp([SGDISK_CMD, "-n", f"{index}:{start}:{end}", device])
             if partition_type is not None:
                 # convert to a 4 char (or more) string right padded with 0
                 # 82 -> 8200.  'Linux' -> 'Linux'
                 pinput = str(partition_type).ljust(4, "0")
-                subp.subp(
-                    [SGDISK_CMD, "-t", "{}:{}".format(index, pinput), device]
-                )
+                subp.subp([SGDISK_CMD, "-t", f"{index}:{pinput}", device])
     except Exception:
         LOG.warning("Failed to partition device %s", device)
         raise

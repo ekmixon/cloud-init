@@ -38,10 +38,7 @@ def find_module(base_name: str, search_paths, required_attrs=None) -> tuple:
             pass
         if not mod:
             continue
-        found_attrs = 0
-        for attr in required_attrs:
-            if hasattr(mod, attr):
-                found_attrs += 1
+        found_attrs = sum(1 for attr in required_attrs if hasattr(mod, attr))
         if found_attrs == len(required_attrs):
             found_paths.append(full_path)
     return (found_paths, lookup_paths)

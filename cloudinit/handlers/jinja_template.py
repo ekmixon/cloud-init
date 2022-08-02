@@ -102,9 +102,7 @@ def render_jinja_payload_from_file(
     rendered_payload = render_jinja_payload(
         payload, payload_fn, instance_data, debug
     )
-    if not rendered_payload:
-        return None
-    return rendered_payload
+    return rendered_payload or None
 
 
 def render_jinja_payload(payload, payload_fn, instance_data, debug=False):
@@ -122,13 +120,12 @@ def render_jinja_payload(payload, payload_fn, instance_data, debug=False):
     except (TypeError, JUndefinedError) as e:
         LOG.warning("Ignoring jinja template for %s: %s", payload_fn, str(e))
         return None
-    warnings = [
+    if warnings := [
         "'%s'" % var.replace(MISSING_JINJA_PREFIX, "")
         for var in re.findall(
             r"%s[^\s]+" % MISSING_JINJA_PREFIX, rendered_payload
         )
-    ]
-    if warnings:
+    ]:
         LOG.warning(
             "Could not render jinja template variables in file '%s': %s",
             payload_fn,
@@ -153,9 +150,7 @@ def get_jinja_variable_alias(orig_name: str) -> Optional[str]:
         none if no alias required.
     """
     alias_name = re.sub(operator_re, "_", orig_name)
-    if alias_name != orig_name:
-        return alias_name
-    return None
+    return alias_name if alias_name != orig_name else None
 
 
 def convert_jinja_instance_data(
@@ -187,8 +182,7 @@ def convert_jinja_instance_data(
         else:
             result[key] = value
         if include_key_aliases:
-            alias_name = get_jinja_variable_alias(key)
-            if alias_name:
+            if alias_name := get_jinja_variable_alias(key):
                 result[alias_name] = copy.deepcopy(result[key])
     return result
 

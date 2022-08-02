@@ -78,7 +78,7 @@ def recv_key(key, keyserver, retries=(1, 1)):
     @param retries: an iterable of sleep lengths for retries.
                     Use None to indicate no retries."""
     LOG.debug("Importing key '%s' from keyserver '%s'", key, keyserver)
-    cmd = ["gpg", "--no-tty", "--keyserver=%s" % keyserver, "--recv-keys", key]
+    cmd = ["gpg", "--no-tty", f"--keyserver={keyserver}", "--recv-keys", key]
     if retries is None:
         retries = []
     trynum = 0

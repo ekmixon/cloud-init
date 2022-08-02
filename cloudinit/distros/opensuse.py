@@ -69,19 +69,16 @@ class Distro(distros.Distro):
         if pkgs is None:
             pkgs = []
 
-        # No user interaction possible, enable non-interactive mode
-        cmd = ["zypper", "--non-interactive"]
-
         # Command is the operation, such as install
         if command == "upgrade":
             command = "update"
-        cmd.append(command)
-
+        cmd = ["zypper", "--non-interactive", command]
         # args are the arguments to the command, not global options
-        if args and isinstance(args, str):
-            cmd.append(args)
-        elif args and isinstance(args, list):
-            cmd.extend(args)
+        if args:
+            if isinstance(args, str):
+                cmd.append(args)
+            elif isinstance(args, list):
+                cmd.extend(args)
 
         pkglist = util.expand_package_list("%s-%s", pkgs)
         cmd.extend(pkglist)
@@ -118,19 +115,14 @@ class Distro(distros.Distro):
             return util.load_file(filename).strip()
         elif self.uses_systemd():
             (out, _err) = subp.subp(["hostname"])
-            if len(out):
-                return out
-            else:
-                return default
+            return out if len(out) else default
         else:
             try:
                 conf = self._read_hostname_conf(filename)
                 hostname = conf.hostname
             except IOError:
                 pass
-            if not hostname:
-                return default
-            return hostname
+            return hostname or default
 
     def _get_localhost_ip(self):
         return "127.0.1.1"
@@ -177,8 +169,11 @@ class Distro(distros.Distro):
 
             # This is horribly complicated because of a case of
             # "we do not care if versions should be increasing syndrome"
-            if (major_ver >= 15 and "openSUSE" not in name) or (
-                major_ver >= 15 and "openSUSE" in name and major_ver != 42
+            if (
+                major_ver >= 15
+                and "openSUSE" not in name
+                or major_ver >= 15
+                and major_ver != 42
             ):
                 self._preferred_ntp_clients = [
                     "chrony",

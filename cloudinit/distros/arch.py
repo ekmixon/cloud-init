@@ -45,12 +45,7 @@ class Distro(distros.Distro):
                 "value is /etc/locale.conf",
                 out_fn,
             )
-        lines = [
-            util.make_header(),
-            # Hard-coding the charset isn't ideal, but there is no other way.
-            "%s UTF-8" % (locale),
-            "",
-        ]
+        lines = [util.make_header(), f"{locale} UTF-8", ""]
         util.write_file(self.locale_gen_fn, "\n".join(lines))
         subp.subp(["locale-gen"], capture=False)
         # In the future systemd can handle locale-gen stuff:
@@ -140,9 +135,7 @@ class Distro(distros.Distro):
             hostname = conf.hostname
         except IOError:
             pass
-        if not hostname:
-            return default
-        return hostname
+        return hostname or default
 
     # hostname (inetutils) isn't installed per default on arch, so we use
     # hostnamectl which is installed per default (systemd).
@@ -217,10 +210,11 @@ def _render_network(
             "Connection": "ethernet",
             "Interface": dev,
             "IP": info.get("bootproto"),
-            "Address": "%s/%s" % (info.get("address"), info.get("netmask")),
+            "Address": f'{info.get("address")}/{info.get("netmask")}',
             "Gateway": info.get("gateway"),
             "DNS": info.get("dns-nameservers", []),
         }
+
         util.write_file(net_fn, convert_netctl(net_cfg))
         if enable_func and info.get("auto"):
             enable_func(dev)

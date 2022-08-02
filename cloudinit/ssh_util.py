@@ -89,10 +89,7 @@ class AuthKeyLine(object):
             toks.append(self.base64)
         if self.comment:
             toks.append(self.comment)
-        if not toks:
-            return self.source
-        else:
-            return " ".join(toks)
+        return " ".join(toks) if toks else self.source
 
 
 class AuthKeyLineParser(object):
@@ -126,16 +123,16 @@ class AuthKeyLineParser(object):
         while i < len(ent) and ((quoted) or (ent[i] not in (" ", "\t"))):
             curc = ent[i]
             if i + 1 >= len(ent):
-                i = i + 1
+                i += 1
                 break
             nextc = ent[i + 1]
             if curc == "\\" and nextc == '"':
-                i = i + 1
+                i += 1
             elif curc == '"':
                 quoted = not quoted
-            i = i + 1
+            i += 1
 
-        options = ent[0:i]
+        options = ent[:i]
 
         # Return the rest of the string in 'remain'
         remain = ent[i:].lstrip()
@@ -151,9 +148,9 @@ class AuthKeyLineParser(object):
             # return ketype, key, [comment]
             toks = ent.split(None, 2)
             if len(toks) < 2:
-                raise TypeError("To few fields: %s" % len(toks))
+                raise TypeError(f"To few fields: {len(toks)}")
             if toks[0] not in VALID_KEY_TYPES:
-                raise TypeError("Invalid keytype %s" % toks[0])
+                raise TypeError(f"Invalid keytype {toks[0]}")
 
             # valid key type and 2 or 3 fields:
             if len(toks) == 2:
@@ -192,8 +189,7 @@ def parse_authorized_keys(fnames):
         try:
             if os.path.isfile(fname):
                 lines = util.load_file(fname).splitlines()
-                for line in lines:
-                    contents.append(parser.parse(line))
+                contents.extend(parser.parse(line) for line in lines)
         except (IOError, OSError):
             util.logexc(LOG, "Error reading lines from %s", fname)
 
@@ -201,8 +197,8 @@ def parse_authorized_keys(fnames):
 
 
 def update_authorized_keys(old_entries, keys):
-    to_add = list([k for k in keys if k.valid()])
-    for i in range(0, len(old_entries)):
+    to_add = [k for k in keys if k.valid()]
+    for i in range(len(old_entries)):
         ent = old_entries[i]
         if not ent.valid():
             continue
@@ -266,12 +262,7 @@ def check_permissions(username, current_path, full_path, is_file, strictmodes):
        and world users (022)
     """
 
-    # group/world can only execute the folder (access)
-    minimal_permissions = 0o711
-    if is_file:
-        # group/world can only read the file
-        minimal_permissions = 0o644
-
+    minimal_permissions = 0o644 if is_file else 0o711
     # 1. owner must be either root or the user itself
     owner = util.get_owner(current_path)
     if strictmodes and owner != username and owner != "root":
@@ -338,7 +329,7 @@ def check_create_path(username, filename, strictmodes):
         # strange home directories
         home_folder = os.path.dirname(user_pwent.pw_dir)
         for directory in directories:
-            parent_folder += "/" + directory
+            parent_folder += f"/{directory}"
 
             # security check, disallow symlinks in the AuthorizedKeysFile path.
             if os.path.islink(parent_folder):
@@ -438,13 +429,12 @@ def extract_authorized_keys(username, sshd_cfg_file=DEF_SSHD_CFG):
             [
                 "%u" in key_path,
                 "%h" in key_path,
-                auth_key_fn.startswith("{}/".format(pw_ent.pw_dir)),
+                auth_key_fn.startswith(f"{pw_ent.pw_dir}/"),
             ]
         ):
-            permissions_ok = check_create_path(
+            if permissions_ok := check_create_path(
                 username, auth_key_fn, strictmodes == "yes"
-            )
-            if permissions_ok:
+            ):
                 user_authorizedkeys_file = auth_key_fn
                 break
 
@@ -464,10 +454,7 @@ def extract_authorized_keys(username, sshd_cfg_file=DEF_SSHD_CFG):
 def setup_user_keys(keys, username, options=None):
     # Turn the 'update' keys given into actual entries
     parser = AuthKeyLineParser()
-    key_entries = []
-    for k in keys:
-        key_entries.append(parser.parse(str(k), options=options))
-
+    key_entries = [parser.parse(str(k), options=options) for k in keys]
     # Extract the old and make the new
     (auth_key_fn, auth_key_entries) = extract_authorized_keys(username)
     ssh_dir = os.path.dirname(auth_key_fn)
@@ -484,25 +471,23 @@ class SshdConfigLine(object):
 
     @property
     def key(self):
-        if self._key is None:
-            return None
-        # Keywords are case-insensitive
-        return self._key.lower()
+        return None if self._key is None else self._key.lower()
 
     def __str__(self):
         if self._key is None:
             return str(self.line)
-        else:
-            v = str(self._key)
-            if self.value:
-                v += " " + str(self.value)
-            return v
+        v = str(self._key)
+        if self.value:
+            v += f" {str(self.value)}"
+        return v
 
 
 def parse_ssh_config(fname):
-    if not os.path.isfile(fname):
-        return []
-    return parse_ssh_config_lines(util.load_file(fname).splitlines())
+    return (
+        parse_ssh_config_lines(util.load_file(fname).splitlines())
+        if os.path.isfile(fname)
+        else []
+    )
 
 
 def parse_ssh_config_lines(lines):
@@ -534,14 +519,7 @@ def parse_ssh_config_lines(lines):
 
 def parse_ssh_config_map(fname):
     lines = parse_ssh_config(fname)
-    if not lines:
-        return {}
-    ret = {}
-    for line in lines:
-        if not line.key:
-            continue
-        ret[line.key] = line.value
-    return ret
+    return {line.key: line.value for line in lines if line.key} if lines else {}
 
 
 def update_ssh_config(updates, fname=DEF_SSHD_CFG):

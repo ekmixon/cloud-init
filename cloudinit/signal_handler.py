@@ -50,11 +50,9 @@ def _handle_exit(signum, frame):
 
 
 def attach_handlers():
-    sigs_attached = 0
     for signum in EXIT_FOR.keys():
         signal.signal(signum, _handle_exit)
-    sigs_attached += len(EXIT_FOR)
-    return sigs_attached
+    return 0 + len(EXIT_FOR)
 
 
 # vi: ts=4 expandtab

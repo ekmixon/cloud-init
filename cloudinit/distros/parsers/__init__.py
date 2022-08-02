@@ -11,7 +11,7 @@ def chop_comment(text, comment_chars):
     if not comment_locations:
         return (text, "")
     min_comment = min(comment_locations)
-    before_comment = text[0:min_comment]
+    before_comment = text[:min_comment]
     comment = text[min_comment:]
     return (before_comment, comment)
 

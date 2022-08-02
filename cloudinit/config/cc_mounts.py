@@ -62,6 +62,7 @@ swap file is created.
         maxsize: <size in bytes>
 """
 
+
 import logging
 import os
 import re
@@ -75,7 +76,7 @@ DEVICE_NAME_RE = re.compile(DEVICE_NAME_FILTER)
 # Name matches 'server:/path'
 NETWORK_NAME_FILTER = r"^.+:.*"
 NETWORK_NAME_RE = re.compile(NETWORK_NAME_FILTER)
-WS = re.compile("[%s]+" % (whitespace))
+WS = re.compile(f"[{whitespace}]+")
 FSTAB_PATH = "/etc/fstab"
 MNT_COMMENT = "comment=cloudconfig"
 
@@ -86,29 +87,26 @@ def is_meta_device_name(name):
     # return true if this is a metadata service name
     if name in ["ami", "root", "swap"]:
         return True
-    # names 'ephemeral0' or 'ephemeral1'
-    # 'ebs[0-9]' appears when '--block-device-mapping sdf=snap-d4d90bbc'
-    for enumname in ("ephemeral", "ebs"):
-        if name.startswith(enumname) and name.find(":") == -1:
-            return True
-    return False
+    return any(
+        name.startswith(enumname) and name.find(":") == -1
+        for enumname in ("ephemeral", "ebs")
+    )
 
 
 def is_network_device(name):
     # return true if this is a network device
-    if NETWORK_NAME_RE.match(name):
-        return True
-    return False
+    return bool(NETWORK_NAME_RE.match(name))
 
 
 def _get_nth_partition_for_device(device_path, partition_number):
     potential_suffixes = [
         str(partition_number),
-        "p%s" % (partition_number,),
-        "-part%s" % (partition_number,),
+        f"p{partition_number}",
+        f"-part{partition_number}",
     ]
+
     for suffix in potential_suffixes:
-        potential_partition_device = "%s%s" % (device_path, suffix)
+        potential_partition_device = f"{device_path}{suffix}"
         if os.path.exists(potential_partition_device):
             return potential_partition_device
     return None
@@ -150,11 +148,10 @@ def sanitize_devname(startname, transformer, log, aliases=None):
         if not device_path:
             return None
         if not device_path.startswith("/"):
-            device_path = "/dev/%s" % (device_path,)
+            device_path = f"/dev/{device_path}"
         log.debug("Mapped metadata name %s to %s", orig, device_path)
-    else:
-        if DEVICE_NAME_RE.match(startname):
-            device_path = "/dev/%s" % (device_path,)
+    elif DEVICE_NAME_RE.match(startname):
+        device_path = f"/dev/{device_path}"
 
     partition_path = None
     if partition_number is None:
@@ -167,9 +164,7 @@ def sanitize_devname(startname, transformer, log, aliases=None):
             return None
 
     if _is_block_device(device_path, partition_path):
-        if partition_path is not None:
-            return partition_path
-        return device_path
+        return partition_path if partition_path is not None else device_path
     return None
 
 
@@ -183,7 +178,7 @@ def suggested_swapsize(memsize=None, maxsize=None, fsys=None):
 
     info = {"avail": "na", "max_in": maxsize, "mem": memsize}
 
-    if fsys is None and maxsize is None:
+    if fsys is None and maxsize is None or not fsys and maxsize is None:
         # set max to 8GB default if no filesystem given
         maxsize = sugg_max
     elif fsys:
@@ -197,9 +192,6 @@ def suggested_swapsize(memsize=None, maxsize=None, fsys=None):
         elif maxsize > ((avail * 0.9)):
             # set to 90% of available disk space
             maxsize = int(avail * 0.9)
-    elif maxsize is None:
-        maxsize = sugg_max
-
     info["max"] = maxsize
 
     formulas = [
@@ -231,12 +223,9 @@ def suggested_swapsize(memsize=None, maxsize=None, fsys=None):
     info["size"] = size
 
     MB = 2 ** 20
-    pinfo = {}
-    for k, v in info.items():
-        if isinstance(v, int):
-            pinfo[k] = "%s MB" % (v / MB)
-        else:
-            pinfo[k] = v
+    pinfo = {
+        k: f"{v / MB} MB" if isinstance(v, int) else v for k, v in info.items()
+    }
 
     LOG.debug(
         "suggest %s swap for %s memory with '%s' disk given max=%s [max=%s]'",
@@ -263,15 +252,9 @@ def create_swapfile(fname: str, size: str) -> None:
         )
 
         if method == "fallocate":
-            cmd = ["fallocate", "-l", "%sM" % size, fname]
+            cmd = ["fallocate", "-l", f"{size}M", fname]
         elif method == "dd":
-            cmd = [
-                "dd",
-                "if=/dev/zero",
-                "of=%s" % fname,
-                "bs=1M",
-                "count=%s" % size,
-            ]
+            cmd = ["dd", "if=/dev/zero", f"of={fname}", "bs=1M", f"count={size}"]
 
         try:
             subp.subp(cmd, capture=True)
@@ -364,7 +347,7 @@ def handle_swapcfg(swapcfg):
             return fname
         try:
             for line in util.load_file("/proc/swaps").splitlines():
-                if line.startswith(fname + " "):
+                if line.startswith(f"{fname} "):
                     LOG.debug("swap file %s already in use", fname)
                     return fname
             LOG.debug("swap file %s exists, but not in /proc/swaps", fname)

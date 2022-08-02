@@ -147,8 +147,7 @@ def handle(name, cfg, cloud, _log, _args):
     for (name, members) in groups.items():
         cloud.distro.create_group(name, members)
     for (user, config) in users.items():
-        ssh_redirect_user = config.pop("ssh_redirect_user", False)
-        if ssh_redirect_user:
+        if ssh_redirect_user := config.pop("ssh_redirect_user", False):
             if "ssh_authorized_keys" in config or "ssh_import_id" in config:
                 raise ValueError(
                     "Not creating user %s. ssh_redirect_user cannot be"

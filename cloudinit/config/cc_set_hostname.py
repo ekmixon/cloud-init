@@ -98,9 +98,9 @@ def handle(name, cfg, cloud, log, _args):
     try:
         cloud.distro.set_hostname(hostname, fqdn)
     except Exception as e:
-        msg = "Failed to set the hostname to %s (%s)" % (fqdn, hostname)
+        msg = f"Failed to set the hostname to {fqdn} ({hostname})"
         util.logexc(log, msg)
-        raise SetHostnameError("%s: %s" % (msg, e)) from e
+        raise SetHostnameError(f"{msg}: {e}") from e
     write_json(prev_fn, {"hostname": hostname, "fqdn": fqdn})
 
 

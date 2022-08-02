@@ -60,29 +60,23 @@ class CloudConfigPartHandler(handlers.Handler):
         # Capture which files we merged from...
         file_lines = []
         if self.file_names:
-            file_lines.append("# from %s files" % (len(self.file_names)))
+            file_lines.append(f"# from {len(self.file_names)} files")
             for fn in self.file_names:
                 if not fn:
                     fn = "?"
-                file_lines.append("# %s" % (fn))
+                file_lines.append(f"# {fn}")
             file_lines.append("")
         if self.cloud_buf is not None:
             # Something was actually gathered....
-            lines = [
-                CLOUD_PREFIX,
-                "",
-            ]
-            lines.extend(file_lines)
-            lines.append(safeyaml.dumps(self.cloud_buf))
+            lines = [CLOUD_PREFIX, "", *file_lines, safeyaml.dumps(self.cloud_buf)]
         else:
             lines = []
         util.write_file(self.cloud_fn, "\n".join(lines), 0o600)
 
     def _extract_mergers(self, payload, headers):
         merge_header_headers = ""
-        for h in [MERGE_HEADER, "X-%s" % (MERGE_HEADER)]:
-            tmp_h = headers.get(h, "")
-            if tmp_h:
+        for h in [MERGE_HEADER, f"X-{MERGE_HEADER}"]:
+            if tmp_h := headers.get(h, ""):
                 merge_header_headers = tmp_h
                 break
         # Select either the merge-type from the content

@@ -72,15 +72,23 @@ class Distro(cloudinit.distros.bsd.BSD):
             pw_useradd_cmd.append("-d/nonexistent")
             log_pw_useradd_cmd.append("-d/nonexistent")
         else:
-            pw_useradd_cmd.append(
-                "-d{home_dir}/{name}".format(home_dir=self.home_dir, name=name)
-            )
-            pw_useradd_cmd.append("-m")
-            log_pw_useradd_cmd.append(
-                "-d{home_dir}/{name}".format(home_dir=self.home_dir, name=name)
+            pw_useradd_cmd.extend(
+                (
+                    "-d{home_dir}/{name}".format(
+                        home_dir=self.home_dir, name=name
+                    ),
+                    "-m",
+                )
             )
 
-            log_pw_useradd_cmd.append("-m")
+            log_pw_useradd_cmd.extend(
+                (
+                    "-d{home_dir}/{name}".format(
+                        home_dir=self.home_dir, name=name
+                    ),
+                    "-m",
+                )
+            )
 
         # Run the command
         LOG.info("Adding user %s", name)
@@ -91,7 +99,7 @@ class Distro(cloudinit.distros.bsd.BSD):
             raise
         # Set the password if it is provided
         # For security consideration, only hashed passwd is assumed
-        passwd_val = kwargs.get("passwd", None)
+        passwd_val = kwargs.get("passwd")
         if passwd_val is not None:
             self.set_passwd(name, passwd_val, hashed=True)
 
@@ -103,17 +111,14 @@ class Distro(cloudinit.distros.bsd.BSD):
             raise
 
     def set_passwd(self, user, passwd, hashed=False):
-        if hashed:
-            hash_opt = "-H"
-        else:
-            hash_opt = "-h"
-
+        hash_opt = "-H" if hashed else "-h"
         try:
             subp.subp(
                 ["pw", "usermod", user, hash_opt, "0"],
                 data=passwd,
-                logstring="chpasswd for %s" % user,
+                logstring=f"chpasswd for {user}",
             )
+
         except Exception:
             util.logexc(LOG, "Failed to set password for %s", user)
             raise
@@ -129,9 +134,7 @@ class Distro(cloudinit.distros.bsd.BSD):
         # Adjust the locales value to the new value
         newconf = StringIO()
         for line in util.load_file(self.login_conf_fn).splitlines():
-            newconf.write(
-                re.sub(r"^default:", r"default:lang=%s:" % locale, line)
-            )
+            newconf.write(re.sub(r"^default:", f"default:lang={locale}:", line))
             newconf.write("\n")
 
         # Make a backup of login.conf.

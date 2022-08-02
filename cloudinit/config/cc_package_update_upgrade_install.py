@@ -53,10 +53,7 @@ __doc__ = get_meta_doc(meta)
 
 
 def _multi_cfg_bool_get(cfg, *keys):
-    for k in keys:
-        if util.get_cfg_option_bool(cfg, k, False):
-            return True
-    return False
+    return any(util.get_cfg_option_bool(cfg, k, False) for k in keys)
 
 
 def _fire_reboot(log, wait_attempts=6, initial_sleep=1, backoff=2):
@@ -70,9 +67,7 @@ def _fire_reboot(log, wait_attempts=6, initial_sleep=1, backoff=2):
         log.debug("Rebooted, but still running after %s seconds", int(elapsed))
     # If we got here, not good
     elapsed = time.time() - start
-    raise RuntimeError(
-        "Reboot did not happen after %s seconds!" % (int(elapsed))
-    )
+    raise RuntimeError(f"Reboot did not happen after {int(elapsed)} seconds!")
 
 
 def handle(_name, cfg, cloud, log, _args):

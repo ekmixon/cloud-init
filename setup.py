@@ -46,7 +46,7 @@ def pkg_config_read(library, var):
             "systemdsystemgeneratordir": "/lib/systemd/system-generators",
         }
     }
-    cmd = ["pkg-config", "--variable=%s" % var, library]
+    cmd = ["pkg-config", f"--variable={var}", library]
     try:
         path = subprocess.check_output(cmd).decode("utf-8")
         path = path.strip()
@@ -60,10 +60,7 @@ def pkg_config_read(library, var):
 
 def in_virtualenv():
     try:
-        if sys.real_prefix == sys.prefix:
-            return False
-        else:
-            return True
+        return sys.real_prefix != sys.prefix
     except AttributeError:
         return False
 
@@ -169,7 +166,7 @@ INITSYS_ROOTS = {
     ),
     "upstart": "etc/init/",
 }
-INITSYS_TYPES = sorted([f.partition(".")[0] for f in INITSYS_ROOTS.keys()])
+INITSYS_TYPES = sorted([f.partition(".")[0] for f in INITSYS_ROOTS])
 
 
 # Install everything in the right location and take care of Linux (default) and
@@ -187,12 +184,7 @@ elif os.path.isfile("/etc/system-release-cpe"):
     with open("/etc/system-release-cpe") as f:
         cpe_data = f.read().rstrip().split(":")
 
-        if cpe_data[1] == "\o":  # noqa: W605
-            # URI formatted CPE
-            inc = 0
-        else:
-            # String formatted CPE
-            inc = 1
+        inc = 0 if cpe_data[1] == "\o" else 1
         (cpe_vendor, cpe_product, cpe_version) = cpe_data[2 + inc : 5 + inc]
         if cpe_vendor == "amazon":
             USR_LIB_EXEC = "usr/libexec"
@@ -204,9 +196,7 @@ class MyEggInfo(egg_info):
     def find_sources(self):
         ret = egg_info.find_sources(self)
         # update the self.filelist.
-        self.filelist.exclude_pattern(
-            RENDERED_TMPD_PREFIX + ".*", is_regex=True
-        )
+        self.filelist.exclude_pattern(f"{RENDERED_TMPD_PREFIX}.*", is_regex=True)
         # but since mfname is already written we have to update it also.
         mfname = os.path.join(self.egg_info, "SOURCES.txt")
         if os.path.exists(mfname):
@@ -247,9 +237,8 @@ class InitsysInstallData(install):
         ):
             self.init_system = ["systemd"]
 
-        bad = [f for f in self.init_system if f not in INITSYS_TYPES]
-        if len(bad) != 0:
-            raise DistutilsError("Invalid --init-system: %s" % ",".join(bad))
+        if bad := [f for f in self.init_system if f not in INITSYS_TYPES]:
+            raise DistutilsError(f'Invalid --init-system: {",".join(bad)}')
 
         for system in self.init_system:
             # add data files for anything that starts with '<system>.'
@@ -267,19 +256,19 @@ class InitsysInstallData(install):
 
 
 if not in_virtualenv():
-    USR = "/" + USR
-    ETC = "/" + ETC
-    USR_LIB_EXEC = "/" + USR_LIB_EXEC
-    LIB = "/" + LIB
+    USR = f"/{USR}"
+    ETC = f"/{ETC}"
+    USR_LIB_EXEC = f"/{USR_LIB_EXEC}"
+    LIB = f"/{LIB}"
     for k in INITSYS_ROOTS.keys():
-        INITSYS_ROOTS[k] = "/" + INITSYS_ROOTS[k]
+        INITSYS_ROOTS[k] = f"/{INITSYS_ROOTS[k]}"
 
 data_files = [
-    (ETC + "/cloud", [render_tmpl("config/cloud.cfg.tmpl")]),
-    (ETC + "/cloud/cloud.cfg.d", glob("config/cloud.cfg.d/*")),
-    (ETC + "/cloud/templates", glob("templates/*")),
+    (f"{ETC}/cloud", [render_tmpl("config/cloud.cfg.tmpl")]),
+    (f"{ETC}/cloud/cloud.cfg.d", glob("config/cloud.cfg.d/*")),
+    (f"{ETC}/cloud/templates", glob("templates/*")),
     (
-        USR_LIB_EXEC + "/cloud-init",
+        f"{USR_LIB_EXEC}/cloud-init",
         [
             "tools/ds-identify",
             "tools/hook-hotplug",
@@ -288,34 +277,36 @@ data_files = [
         ],
     ),
     (
-        USR + "/share/bash-completion/completions",
+        f"{USR}/share/bash-completion/completions",
         ["bash_completion/cloud-init"],
     ),
-    (USR + "/share/doc/cloud-init", [f for f in glob("doc/*") if is_f(f)]),
+    (f"{USR}/share/doc/cloud-init", [f for f in glob("doc/*") if is_f(f)]),
     (
-        USR + "/share/doc/cloud-init/examples",
+        f"{USR}/share/doc/cloud-init/examples",
         [f for f in glob("doc/examples/*") if is_f(f)],
     ),
     (
-        USR + "/share/doc/cloud-init/examples/seed",
+        f"{USR}/share/doc/cloud-init/examples/seed",
         [f for f in glob("doc/examples/seed/*") if is_f(f)],
     ),
 ]
+
 if not platform.system().endswith("BSD"):
     data_files.extend(
         [
             (
-                ETC + "/NetworkManager/dispatcher.d/",
+                f"{ETC}/NetworkManager/dispatcher.d/",
                 ["tools/hook-network-manager"],
             ),
-            (ETC + "/dhcp/dhclient-exit-hooks.d/", ["tools/hook-dhclient"]),
-            (LIB + "/udev/rules.d", [f for f in glob("udev/*.rules")]),
+            (f"{ETC}/dhcp/dhclient-exit-hooks.d/", ["tools/hook-dhclient"]),
+            (f"{LIB}/udev/rules.d", list(glob("udev/*.rules"))),
             (
-                ETC + "/systemd/system/sshd-keygen@.service.d/",
+                f"{ETC}/systemd/system/sshd-keygen@.service.d/",
                 ["systemd/disable-sshd-keygen-if-cloud-init-active.conf"],
             ),
         ]
     )
+
 # Use a subclass for install that handles
 # adding on the right init system configuration files
 cmdclass = {

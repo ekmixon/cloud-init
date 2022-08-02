@@ -57,9 +57,9 @@ def get_parser(parser=None):
         "-i",
         "--instance-data",
         type=str,
-        help="Path to instance-data.json file. Default is /run/cloud-init/%s"
-        % INSTANCE_JSON_FILE,
+        help=f"Path to instance-data.json file. Default is /run/cloud-init/{INSTANCE_JSON_FILE}",
     )
+
     parser.add_argument(
         "-l",
         "--list-keys",
@@ -148,10 +148,13 @@ def _read_instance_data(instance_data, user_data, vendor_data) -> dict:
     :raise: IOError/OSError on absence of instance-data.json file or invalid
         access perms.
     """
-    paths = None
     uid = os.getuid()
-    if not all([instance_data, user_data, vendor_data]):
-        paths = read_cfg_paths()
+    paths = (
+        None
+        if all([instance_data, user_data, vendor_data])
+        else read_cfg_paths()
+    )
+
     if instance_data:
         instance_data_fn = instance_data
     else:
@@ -171,14 +174,10 @@ def _read_instance_data(instance_data, user_data, vendor_data) -> dict:
                 instance_data_fn = redacted_data_fn
         else:
             instance_data_fn = redacted_data_fn
-    if user_data:
-        user_data_fn = user_data
-    else:
-        user_data_fn = os.path.join(paths.instance_link, "user-data.txt")
-    if vendor_data:
-        vendor_data_fn = vendor_data
-    else:
-        vendor_data_fn = os.path.join(paths.instance_link, "vendor-data.txt")
+    user_data_fn = user_data or os.path.join(paths.instance_link, "user-data.txt")
+    vendor_data_fn = vendor_data or os.path.join(
+        paths.instance_link, "vendor-data.txt"
+    )
 
     try:
         instance_json = util.load_file(instance_data_fn)
@@ -191,14 +190,11 @@ def _read_instance_data(instance_data, user_data, vendor_data) -> dict:
 
     instance_data = util.load_json(instance_json)
     if uid != 0:
-        instance_data["userdata"] = "<%s> file:%s" % (
-            REDACT_SENSITIVE_VALUE,
-            user_data_fn,
-        )
-        instance_data["vendordata"] = "<%s> file:%s" % (
-            REDACT_SENSITIVE_VALUE,
-            vendor_data_fn,
-        )
+        instance_data["userdata"] = f"<{REDACT_SENSITIVE_VALUE}> file:{user_data_fn}"
+        instance_data[
+            "vendordata"
+        ] = f"<{REDACT_SENSITIVE_VALUE}> file:{vendor_data_fn}"
+
     else:
         instance_data["userdata"] = load_userdata(user_data_fn)
         instance_data["vendordata"] = load_userdata(vendor_data_fn)
@@ -233,7 +229,7 @@ def _find_instance_data_leaf_by_varname_path(
                     leaf=key_path_part, key_path=walked_key_path
                 )
             else:
-                msg = "Undefined instance-data key '{}'".format(varname)
+                msg = f"Undefined instance-data key '{varname}'"
             raise ValueError(msg) from e
         if key_path_part in response:
             response = response[key_path_part]
@@ -266,13 +262,12 @@ def handle_args(name, args):
         return 1
     if args.format:
         payload = "## template: jinja\n{fmt}".format(fmt=args.format)
-        rendered_payload = render_jinja_payload(
+        if rendered_payload := render_jinja_payload(
             payload=payload,
             payload_fn="query commandline",
             instance_data=instance_data,
-            debug=True if args.debug else False,
-        )
-        if rendered_payload:
+            debug=bool(args.debug),
+        ):
             print(rendered_payload)
             return 0
         return 1

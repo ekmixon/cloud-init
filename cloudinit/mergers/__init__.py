@@ -32,11 +32,9 @@ class UnknownMerger(object):
     def merge(self, source, merge_with):
         type_name = type_utils.obj_name(source)
         type_name = type_name.lower()
-        method_name = "_on_%s" % (type_name)
-        meth = None
+        method_name = f"_on_{type_name}"
         args = [source, merge_with]
-        if hasattr(self, method_name):
-            meth = getattr(self, method_name)
+        meth = getattr(self, method_name) if hasattr(self, method_name) else None
         if not meth:
             meth = self._handle_unknown
             args.insert(0, method_name)
@@ -46,13 +44,10 @@ class UnknownMerger(object):
 class LookupMerger(UnknownMerger):
     def __init__(self, lookups=None):
         UnknownMerger.__init__(self)
-        if lookups is None:
-            self._lookups = []
-        else:
-            self._lookups = lookups
+        self._lookups = [] if lookups is None else lookups
 
     def __str__(self):
-        return "LookupMerger: (%s)" % (len(self._lookups))
+        return f"LookupMerger: ({len(self._lookups)})"
 
     # For items which can not be merged by the parent this object
     # will lookup in a internally maintained set of objects and
@@ -60,18 +55,22 @@ class LookupMerger(UnknownMerger):
     # any of the contained objects have the needed method, they
     # will be called to perform the merge.
     def _handle_unknown(self, meth_wanted, value, merge_with):
-        meth = None
-        for merger in self._lookups:
-            if hasattr(merger, meth_wanted):
-                # First one that has that method/attr gets to be
-                # the one that will be called
-                meth = getattr(merger, meth_wanted)
-                break
-        if not meth:
-            return UnknownMerger._handle_unknown(
+        meth = next(
+            (
+                getattr(merger, meth_wanted)
+                for merger in self._lookups
+                if hasattr(merger, meth_wanted)
+            ),
+            None,
+        )
+
+        return (
+            meth(value, merge_with)
+            if meth
+            else UnknownMerger._handle_unknown(
                 self, meth_wanted, value, merge_with
             )
-        return meth(value, merge_with)
+        )
 
 
 def dict_extract_mergers(config):
@@ -90,10 +89,7 @@ def dict_extract_mergers(config):
             opts = m["settings"]
         else:
             name = m[0]
-            if len(m) >= 2:
-                opts = m[1:]
-            else:
-                opts = []
+            opts = m[1:] if len(m) >= 2 else []
         if name:
             parsed_mergers.append((name, opts))
     return parsed_mergers
@@ -147,8 +143,7 @@ def construct(parsed_mergers):
     # Now form them...
     mergers = []
     root = LookupMerger(mergers)
-    for (attr, opts) in mergers_to_be:
-        mergers.append(attr(root, opts))
+    mergers.extend(attr(root, opts) for attr, opts in mergers_to_be)
     return root
 
 

@@ -31,10 +31,7 @@ class ResolvConf(object):
     @property
     def local_domain(self):
         self.parse()
-        dm = self._retr_option("domain")
-        if dm:
-            return dm[0]
-        return None
+        return dm[0] if (dm := self._retr_option("domain")) else None
 
     @property
     def search_domains(self):
@@ -42,9 +39,7 @@ class ResolvConf(object):
         current_sds = self._retr_option("search")
         flat_sds = []
         for sdlist in current_sds:
-            for sd in sdlist.split(None):
-                if sd:
-                    flat_sds.append(sd)
+            flat_sds.extend(sd for sd in sdlist.split(None) if sd)
         return flat_sds
 
     def __str__(self):
@@ -57,7 +52,7 @@ class ResolvConf(object):
                 contents.write("%s\n" % (components[0]))
             elif line_type == "option":
                 (cfg_opt, cfg_value, comment_tail) = components
-                line = "%s %s" % (cfg_opt, cfg_value)
+                line = f"{cfg_opt} {cfg_value}"
                 if len(comment_tail):
                     line += comment_tail
                 contents.write("%s\n" % (line))
@@ -99,9 +94,7 @@ class ResolvConf(object):
             if line_type != "option":
                 return False
             (cfg_opt, _cfg_value, _comment_tail) = components
-            if cfg_opt != opt_name:
-                return False
-            return True
+            return cfg_opt == opt_name
 
         new_contents = []
         for c in self._contents:
@@ -156,9 +149,7 @@ class ResolvConf(object):
             try:
                 (cfg_opt, cfg_values) = head.split(None, 1)
             except (IndexError, ValueError) as e:
-                raise IOError(
-                    "Incorrectly formatted resolv.conf line %s" % (i + 1)
-                ) from e
+                raise IOError(f"Incorrectly formatted resolv.conf line {i + 1}") from e
             if cfg_opt not in [
                 "nameserver",
                 "domain",
@@ -166,7 +157,7 @@ class ResolvConf(object):
                 "sortlist",
                 "options",
             ]:
-                raise IOError("Unexpected resolv.conf option %s" % (cfg_opt))
+                raise IOError(f"Unexpected resolv.conf option {cfg_opt}")
             entries.append(("option", [cfg_opt, cfg_values, tail]))
         return entries
 

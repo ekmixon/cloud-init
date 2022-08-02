@@ -156,7 +156,7 @@ def get_default_mirrors(arch=None, target=None):
         return PRIMARY_ARCH_MIRRORS.copy()
     if arch in PORTS_ARCHES:
         return PORTS_MIRRORS.copy()
-    raise ValueError("No default mirror known for arch %s" % arch)
+    raise ValueError(f"No default mirror known for arch {arch}")
 
 
 def handle(name, ocfg, cloud, log, _):
@@ -187,9 +187,11 @@ def _should_configure_on_empty_apt():
     # if no config was provided, should apt configuration be done?
     if util.system_is_snappy():
         return False, "system is snappy."
-    if not (subp.which("apt-get") or subp.which("apt")):
-        return False, "no apt commands."
-    return True, "Apt is available."
+    return (
+        (True, "Apt is available.")
+        if (subp.which("apt-get") or subp.which("apt"))
+        else (False, "no apt commands.")
+    )
 
 
 def apply_apt(cfg, cloud, target):
@@ -224,8 +226,7 @@ def apply_apt(cfg, cloud, target):
         params["MIRROR"] = mirrors["MIRROR"]
 
         matcher = None
-        matchcfg = cfg.get("add_apt_repo_match", ADD_APT_REPO_MATCH)
-        if matchcfg:
+        if matchcfg := cfg.get("add_apt_repo_match", ADD_APT_REPO_MATCH):
             matcher = re.compile(matchcfg).search
 
         add_apt_sources(
@@ -309,7 +310,7 @@ def apply_debconf_selections(cfg, target=None):
     LOG.debug("pkgs_cfgd: %s", pkgs_cfgd)
     need_reconfig = pkgs_cfgd.intersection(pkgs_installed)
 
-    if len(need_reconfig) == 0:
+    if not need_reconfig:
         LOG.debug("no need for reconfig")
         return
 
@@ -337,7 +338,7 @@ def mirrorurl_to_apt_fileprefix(mirror):
     - convert in string / to _"""
     string = mirror
     if string.endswith("/"):
-        string = string[0:-1]
+        string = string[:-1]
     pos = string.find("://")
     if pos >= 0:
         string = string[pos + 3 :]
@@ -360,8 +361,8 @@ def rename_apt_lists(new_mirrors, target, arch):
         if oprefix == nprefix:
             continue
         olen = len(oprefix)
-        for filename in glob.glob("%s_*" % oprefix):
-            newname = "%s%s" % (nprefix, filename[olen:])
+        for filename in glob.glob(f"{oprefix}_*"):
+            newname = f"{nprefix}{filename[olen:]}"
             LOG.debug("Renaming apt list %s to %s", filename, newname)
             try:
                 os.rename(filename, newname)
@@ -428,7 +429,7 @@ def disable_suites(disabled, src, release):
                             break
 
                 if cols[pcol] == releasesuite:
-                    line = "# suite disabled by cloud-init: %s" % line
+                    line = f"# suite disabled by cloud-init: {line}"
             newsrc += line
         retsrc = newsrc
 
@@ -455,9 +456,7 @@ def generate_sources_list(cfg, release, mirrors, cloud):
     tmpl = cfg.get("sources_list", None)
     if tmpl is None:
         LOG.info("No custom template provided, fall back to builtin")
-        template_fn = cloud.get_template_filename(
-            "sources.list.%s" % (cloud.distro.name)
-        )
+        template_fn = cloud.get_template_filename(f"sources.list.{cloud.distro.name}")
         if not template_fn:
             template_fn = cloud.get_template_filename("sources.list")
         if not template_fn:
@@ -543,7 +542,7 @@ def add_apt_sources(
         raise ValueError("did not get a valid repo matcher")
 
     if not isinstance(srcdict, dict):
-        raise TypeError("unknown apt format: %s" % (srcdict))
+        raise TypeError(f"unknown apt format: {srcdict}")
 
     for filename in srcdict:
         ent = srcdict[filename]
@@ -754,9 +753,8 @@ def search_for_mirror_dns(configured, mirrortype, cfg, cloud):
 
         # if we have a fqdn, then search its domain portion first
         (_, fqdn) = util.get_hostname_fqdn(cfg, cloud)
-        mydom = ".".join(fqdn.split(".")[1:])
-        if mydom:
-            doms.append(".%s" % mydom)
+        if mydom := ".".join(fqdn.split(".")[1:]):
+            doms.append(f".{mydom}")
 
         doms.extend(
             (
@@ -765,12 +763,9 @@ def search_for_mirror_dns(configured, mirrortype, cfg, cloud):
             )
         )
 
-        mirror_list = []
         distro = cloud.distro.name
-        mirrorfmt = "http://%s-%s%s/%s" % (distro, mirrordns, "%s", distro)
-        for post in doms:
-            mirror_list.append(mirrorfmt % (post))
-
+        mirrorfmt = f"http://{distro}-{mirrordns}%s/{distro}"
+        mirror_list = [mirrorfmt % (post) for post in doms]
         mirror = util.search_for_mirror(mirror_list)
 
     return mirror
@@ -784,9 +779,7 @@ def update_mirror_info(pmirror, smirror, arch, cloud):
             smirror = pmirror
         return {"PRIMARY": pmirror, "SECURITY": smirror}
 
-    # None specified at all, get default mirrors from cloud
-    mirror_info = cloud.datasource.get_package_mirror_info()
-    if mirror_info:
+    if mirror_info := cloud.datasource.get_package_mirror_info():
         # get_package_mirror_info() returns a dictionary with
         # arbitrary key/value pairs including 'primary' and 'security' keys.
         # caller expects dict with PRIMARY and SECURITY.
@@ -924,7 +917,7 @@ def apt_key(
         for file in os.listdir(APT_TRUSTED_GPG_DIR):
             if file.endswith(".gpg") or file.endswith(".asc"):
                 key_files.append(APT_TRUSTED_GPG_DIR + file)
-        return key_files if key_files else ""
+        return key_files or ""
 
     def apt_key_add():
         """apt-key add <file>
@@ -970,7 +963,7 @@ def apt_key(
 
     if command == "add":
         return apt_key_add()
-    elif command == "finger" or command == "list":
+    elif command in ["finger", "list"]:
         return apt_key_list()
     else:
         raise ValueError(

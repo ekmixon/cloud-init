@@ -45,7 +45,7 @@ class UndefinedJinjaVariable(JUndefined):
     """Class used to represent any undefined jinja template variable."""
 
     def __str__(self):
-        return "%s%s" % (MISSING_JINJA_PREFIX, self._undefined_name)
+        return f"{MISSING_JINJA_PREFIX}{self._undefined_name}"
 
     def __sub__(self, other):
         other = str(other).replace(MISSING_JINJA_PREFIX, "")
@@ -131,22 +131,24 @@ def detect_template(text):
                 "Unknown template rendering type '%s' requested"
                 % template_type
             )
-        if template_type == "jinja" and not JINJA_AVAILABLE:
-            LOG.warning(
-                "Jinja not available as the selected renderer for"
-                " desired template, reverting to the basic renderer."
-            )
-            return ("basic", basic_render, rest)
-        elif template_type == "jinja" and JINJA_AVAILABLE:
-            return ("jinja", jinja_render, rest)
-        if template_type == "cheetah" and not CHEETAH_AVAILABLE:
-            LOG.warning(
-                "Cheetah not available as the selected renderer for"
-                " desired template, reverting to the basic renderer."
-            )
-            return ("basic", basic_render, rest)
-        elif template_type == "cheetah" and CHEETAH_AVAILABLE:
-            return ("cheetah", cheetah_render, rest)
+        if template_type == "jinja":
+            if not JINJA_AVAILABLE:
+                LOG.warning(
+                    "Jinja not available as the selected renderer for"
+                    " desired template, reverting to the basic renderer."
+                )
+                return ("basic", basic_render, rest)
+            elif JINJA_AVAILABLE:
+                return ("jinja", jinja_render, rest)
+        if template_type == "cheetah":
+            if not CHEETAH_AVAILABLE:
+                LOG.warning(
+                    "Cheetah not available as the selected renderer for"
+                    " desired template, reverting to the basic renderer."
+                )
+                return ("basic", basic_render, rest)
+            elif CHEETAH_AVAILABLE:
+                return ("cheetah", cheetah_render, rest)
         # Only thing left over is the basic renderer (it is always available).
         return ("basic", basic_render, rest)
 

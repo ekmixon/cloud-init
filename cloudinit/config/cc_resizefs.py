@@ -72,15 +72,9 @@ def _resize_btrfs(mount_point, devpth):
     # "right" thing. The use of ".snapshot" is specific to "snapper" a generic
     # solution would be walk the subvolumes and find a rw mounted subvolume.
     if not util.mount_is_read_write(mount_point) and os.path.isdir(
-        "%s/.snapshots" % mount_point
+        f"{mount_point}/.snapshots"
     ):
-        return (
-            "btrfs",
-            "filesystem",
-            "resize",
-            "max",
-            "%s/.snapshots" % mount_point,
-        )
+        return "btrfs", "filesystem", "resize", "max", f"{mount_point}/.snapshots"
     else:
         return ("btrfs", "filesystem", "resize", "max", mount_point)
 
@@ -141,10 +135,14 @@ RESIZE_FS_PRECHECK_CMDS = {"ufs": _can_skip_resize_ufs}
 
 def can_skip_resize(fs_type, resize_what, devpth):
     fstype_lc = fs_type.lower()
-    for i, func in RESIZE_FS_PRECHECK_CMDS.items():
-        if fstype_lc.startswith(i):
-            return func(resize_what, devpth)
-    return False
+    return next(
+        (
+            func(resize_what, devpth)
+            for i, func in RESIZE_FS_PRECHECK_CMDS.items()
+            if fstype_lc.startswith(i)
+        ),
+        False,
+    )
 
 
 def maybe_get_writable_device_path(devpath, info, log):
@@ -255,14 +253,13 @@ def handle(name, cfg, _cloud, log, args):
             return  # could not find device from zpool
         resize_what = zpool
 
-    info = "dev=%s mnt_point=%s path=%s" % (devpth, mount_point, resize_what)
-    log.debug("resize_info: %s" % info)
+    info = f"dev={devpth} mnt_point={mount_point} path={resize_what}"
+    log.debug(f"resize_info: {info}")
 
     devpth = maybe_get_writable_device_path(devpth, info, log)
     if not devpth:
         return  # devpath was not a writable block device
 
-    resizer = None
     if can_skip_resize(fs_type, resize_what, devpth):
         log.debug(
             "Skip resize filesystem type %s for %s", fs_type, resize_what
@@ -270,10 +267,14 @@ def handle(name, cfg, _cloud, log, args):
         return
 
     fstype_lc = fs_type.lower()
-    for (pfix, root_cmd) in RESIZE_FS_PREFIXES_CMDS:
-        if fstype_lc.startswith(pfix):
-            resizer = root_cmd
-            break
+    resizer = next(
+        (
+            root_cmd
+            for pfix, root_cmd in RESIZE_FS_PREFIXES_CMDS
+            if fstype_lc.startswith(pfix)
+        ),
+        None,
+    )
 
     if not resizer:
         log.warning(
@@ -306,9 +307,7 @@ def handle(name, cfg, _cloud, log, args):
             args=(resize_cmd, log),
         )
 
-    action = "Resized"
-    if resize_root == NOBLOCK:
-        action = "Resizing (via forking)"
+    action = "Resizing (via forking)" if resize_root == NOBLOCK else "Resized"
     log.debug(
         "%s root filesystem (type=%s, val=%s)", action, fs_type, resize_root
     )

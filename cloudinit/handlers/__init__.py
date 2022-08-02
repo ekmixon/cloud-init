@@ -71,7 +71,7 @@ class Handler(metaclass=abc.ABCMeta):
         self.frequency = frequency
 
     def __repr__(self):
-        return "%s: [%s]" % (type_utils.obj_name(self), self.list_types())
+        return f"{type_utils.obj_name(self)}: [{self.list_types()}]"
 
     def list_types(self):
         # Each subclass must define the supported content prefixes it handles.
@@ -123,7 +123,7 @@ def run_part(mod, data, filename, payload, frequency, headers):
             # Treat as v. 1 which gets no frequency
             mod.handle_part(data, content_type, filename, payload)
         else:
-            raise ValueError("Unknown module version %s" % (mod_ver))
+            raise ValueError(f"Unknown module version {mod_ver}")
     except Exception:
         util.logexc(
             LOG,
@@ -156,9 +156,9 @@ def walker_handle_handler(pdata, _ctype, _filename, payload):
     curcount = pdata["handlercount"]
     modname = PART_HANDLER_FN_TMPL % (curcount)
     frequency = pdata["frequency"]
-    modfname = os.path.join(pdata["handlerdir"], "%s" % (modname))
+    modfname = os.path.join(pdata["handlerdir"], f"{modname}")
     if not modfname.endswith(".py"):
-        modfname = "%s.py" % (modfname)
+        modfname = f"{modfname}.py"
     # TODO(harlowja): Check if path exists??
     util.write_file(modfname, payload, 0o600)
     handlers = pdata["handlers"]
@@ -192,7 +192,7 @@ def _extract_first_or_bytes(blob, size):
             start = start[:size]
     except UnicodeDecodeError:
         # Bytes array doesn't contain text so return chunk of raw bytes
-        start = blob[0:size]
+        start = blob[:size]
     return start
 
 

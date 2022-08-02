@@ -195,7 +195,7 @@ def add_assertions(assertions):
     combined = "\n".join(assertions)
 
     for asrt in assertions:
-        LOG.debug("Snap acking: %s", asrt.split("\n")[0:2])
+        LOG.debug("Snap acking: %s", asrt.split("\n")[:2])
 
     util.write_file(ASSERTIONS_FILE, combined.encode("utf-8"))
     subp.subp(snap_cmd + [ASSERTIONS_FILE], capture=True)

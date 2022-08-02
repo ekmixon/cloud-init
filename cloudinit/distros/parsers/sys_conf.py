@@ -34,10 +34,7 @@ SHELL_VAR_REGEXES = [
 
 
 def _contains_shell_variable(text):
-    for r in SHELL_VAR_REGEXES:
-        if r.search(text):
-            return True
-    return False
+    return any(r.search(text) for r in SHELL_VAR_REGEXES)
 
 
 class SysConf(configobj.ConfigObj):
@@ -74,29 +71,22 @@ class SysConf(configobj.ConfigObj):
                 quot_func = (
                     lambda x: self._get_single_quote(x) % x
                 )  # noqa: E731
-        else:
-            # Quote whitespace if it isn't the start + end of a shell command
-            if value.strip().startswith("$(") and value.strip().endswith(")"):
-                pass
-            else:
-                if re.search(r"[\t\r\n ]", value):
-                    if _contains_shell_variable(value):
+        elif (
+            not value.strip().startswith("$(") or not value.strip().endswith(")")
+        ) and re.search(r"[\t\r\n ]", value):
+            if _contains_shell_variable(value):
                         # If it contains shell variables then we likely want to
                         # leave it alone since the pipes.quote function likes
                         # to use single quotes which won't get expanded...
-                        if re.search(r"[\n\"']", value):
-                            quot_func = (
-                                lambda x: self._get_triple_quote(x) % x
-                            )  # noqa: E731
-                        else:
-                            quot_func = (
-                                lambda x: self._get_single_quote(x) % x
-                            )  # noqa: E731
-                    else:
-                        quot_func = pipes.quote
-        if not quot_func:
-            return value
-        return quot_func(value)
+                quot_func = (
+                    ((lambda x: self._get_triple_quote(x) % x))
+                    if re.search(r"[\n\"']", value)
+                    else ((lambda x: self._get_single_quote(x) % x))
+                )
+
+            else:
+                quot_func = pipes.quote
+        return quot_func(value) if quot_func else value
 
     def _write_line(self, indent_string, entry, this_entry, comment):
         # Ensure it is formatted fine for
@@ -104,13 +94,7 @@ class SysConf(configobj.ConfigObj):
         val = self._decode_element(self._quote(this_entry))
         key = self._decode_element(self._quote(entry))
         cmnt = self._decode_element(comment)
-        return "%s%s%s%s%s" % (
-            indent_string,
-            key,
-            self._a_to_u("="),
-            val,
-            cmnt,
-        )
+        return f'{indent_string}{key}{self._a_to_u("=")}{val}{cmnt}'
 
 
 # vi: ts=4 expandtab

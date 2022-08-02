@@ -152,7 +152,7 @@ def handle(_name, cfg, cloud, log, args):
         (users, _groups) = ug_util.normalize_users_groups(cfg, cloud.distro)
         (user, _user_config) = ug_util.extract_default(users)
         if user:
-            plist = ["%s:%s" % (user, password)]
+            plist = [f"{user}:{password}"]
         else:
             log.warning("No default or defined user to change password for.")
 
@@ -174,10 +174,10 @@ def handle(_name, cfg, cloud, log, args):
             else:
                 # in this else branch, we potentially change the password
                 # hence, a deviation from .append(line)
-                if p == "R" or p == "RANDOM":
+                if p in ["R", "RANDOM"]:
                     p = rand_user_password()
-                    randlist.append("%s:%s" % (u, p))
-                plist_in.append("%s:%s" % (u, p))
+                    randlist.append(f"{u}:{p}")
+                plist_in.append(f"{u}:{p}")
                 users.append(u)
         ch_in = "\n".join(plist_in) + "\n"
         if users:

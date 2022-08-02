@@ -81,7 +81,7 @@ def remove_artifacts(remove_logs, remove_seed=False):
     if not os.path.isdir(init.paths.cloud_dir):
         return 0  # Artifacts dir already cleaned
     seed_path = os.path.join(init.paths.cloud_dir, "seed")
-    for path in glob.glob("%s/*" % init.paths.cloud_dir):
+    for path in glob.glob(f"{init.paths.cloud_dir}/*"):
         if path == seed_path and not remove_seed:
             continue
         try:

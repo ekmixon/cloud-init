@@ -227,11 +227,10 @@ def validate_cloudconfig_schema(
     if errors:
         if strict:
             raise SchemaValidationError(errors)
-        else:
-            messages = ["{0}: {1}".format(k, msg) for k, msg in errors]
-            LOG.warning(
-                "Invalid cloud-config provided:\n%s", "\n".join(messages)
-            )
+        messages = ["{0}: {1}".format(k, msg) for k, msg in errors]
+        LOG.warning(
+            "Invalid cloud-config provided:\n%s", "\n".join(messages)
+        )
 
 
 def annotated_cloudconfig_file(cloudconfig, original_content, schema_errors):
@@ -262,8 +261,7 @@ def annotated_cloudconfig_file(cloudconfig, original_content, schema_errors):
             cloudconfig, original_content
         )
     for path, msg in schema_errors:
-        match = re.match(r"format-l(?P<line>\d+)\.c(?P<col>\d+).*", path)
-        if match:
+        if match := re.match(r"format-l(?P<line>\d+)\.c(?P<col>\d+).*", path):
             line, col = match.groups()
             errors_by_line[int(line)].append(msg)
         else:
@@ -275,8 +273,7 @@ def annotated_cloudconfig_file(cloudconfig, original_content, schema_errors):
             )
     error_index = 1
     for line_number, line in enumerate(lines, 1):
-        errors = errors_by_line[line_number]
-        if errors:
+        if errors := errors_by_line[line_number]:
             error_label = []
             for error in errors:
                 error_label.append("E{0}".format(error_index))
@@ -312,12 +309,12 @@ def validate_cloudconfig_file(config_path, schema, annotate=False):
         paths = read_cfg_paths()
         user_data_file = paths.get_ipath_cur("userdata_raw")
         content = load_file(user_data_file, decode=False)
-    else:
-        if not os.path.exists(config_path):
-            raise RuntimeError(
-                "Configfile {0} does not exist".format(config_path)
-            )
+    elif os.path.exists(config_path):
         content = load_file(config_path, decode=False)
+    else:
+        raise RuntimeError(
+            "Configfile {0} does not exist".format(config_path)
+        )
     if not content.startswith(CLOUD_CONFIG_HEADER):
         errors = (
             (
@@ -353,10 +350,8 @@ def validate_cloudconfig_file(config_path, schema, annotate=False):
         if annotate:
             print(annotated_cloudconfig_file({}, content, error.schema_errors))
         raise error from e
-    if not isinstance(cloudconfig, dict):
-        # Return a meaningful message on empty cloud-config
-        if not annotate:
-            raise RuntimeError("Cloud-config is not a YAML dict.")
+    if not isinstance(cloudconfig, dict) and not annotate:
+        raise RuntimeError("Cloud-config is not a YAML dict.")
     try:
         validate_cloudconfig_schema(cloudconfig, schema, strict=True)
     except SchemaValidationError as e:
@@ -399,8 +394,7 @@ def _schemapath_for_cloudconfig(config, original_content):
             if path_prefix and path_prefix.endswith(previous_list_idx):
                 path_prefix = path_prefix[: -len(previous_list_idx)]
             key = str(list_index)
-            item_indent = len(re.match(RE_YAML_INDENT, line[1:]).groups()[0])
-            item_indent += 1  # For the leading '-' character
+            item_indent = len(re.match(RE_YAML_INDENT, line[1:]).groups()[0]) + 1
             previous_depth = indent_depth
             indent_depth += item_indent
             line = line[item_indent:]  # Strip leading list item + whitespace
@@ -411,7 +405,7 @@ def _schemapath_for_cloudconfig(config, original_content):
             key, value = line.split(":", 1)
         if path_prefix and indent_depth > previous_depth:
             # Append any existing path_prefix for a fully-pathed key
-            key = path_prefix + "." + key
+            key = f"{path_prefix}.{key}"
         while indent_depth <= previous_depth:
             if scopes:
                 previous_depth, path_prefix = scopes.pop()
@@ -425,9 +419,9 @@ def _schemapath_for_cloudconfig(config, original_content):
         if value:
             value = value.strip()
             if value.startswith("["):
-                scopes.append((indent_depth + 2, key + ".0"))
-                for inner_list_index in range(0, len(yaml.safe_load(value))):
-                    list_key = key + "." + str(inner_list_index)
+                scopes.append((indent_depth + 2, f"{key}.0"))
+                for inner_list_index in range(len(yaml.safe_load(value))):
+                    list_key = f"{key}.{str(inner_list_index)}"
                     schema_line_numbers[list_key] = line_number
         schema_line_numbers[key] = line_number
     return schema_line_numbers
@@ -457,7 +451,7 @@ def _get_property_type(property_dict: dict) -> str:
     for sub_item in items.get("oneOf", {}):
         if sub_property_type:
             sub_property_type += "/"
-        sub_property_type += "(" + _get_property_type(sub_item) + ")"
+        sub_property_type += f"({_get_property_type(sub_item)})"
     if sub_property_type:
         return "{0} of {1}".format(property_type, sub_property_type)
     return property_type or "UNDEFINED"
@@ -477,17 +471,15 @@ def _parse_description(description, prefix) -> str:
     """
     list_paragraph = prefix * 3
     description = re.sub(r"(\S)\n(\S)", r"\1 \2", description)
-    description = re.sub(r"\n\n", r"\n\n{}".format(prefix), description)
-    description = re.sub(
-        r"\n( +)-", r"\n{}-".format(list_paragraph), description
-    )
+    description = re.sub(r"\n\n", f"\n\n{prefix}", description)
+    description = re.sub(r"\n( +)-", f"\n{list_paragraph}-", description)
 
     return description
 
 
 def _get_property_doc(schema: dict, defs: dict, prefix="    ") -> str:
     """Return restructured text describing the supported schema properties."""
-    new_prefix = prefix + "    "
+    new_prefix = f"{prefix}    "
     properties = []
     property_keys = [
         schema.get("properties", {}),
@@ -513,15 +505,13 @@ def _get_property_doc(schema: dict, defs: dict, prefix="    ") -> str:
                     prop_type=_get_property_type(prop_config),
                 )
             )
-            items = prop_config.get("items")
-            if items:
+            if items := prop_config.get("items"):
                 if isinstance(items, list):
-                    for item in items:
-                        properties.append(
-                            _get_property_doc(
-                                item, defs=defs, prefix=new_prefix
-                            )
-                        )
+                    properties.extend(
+                        _get_property_doc(item, defs=defs, prefix=new_prefix)
+                        for item in items
+                    )
+
                 elif isinstance(items, dict) and (
                     items.get("properties") or items.get("patternProperties")
                 ):
@@ -577,28 +567,22 @@ def get_meta_doc(meta: MetaSchema, schema: dict = None) -> str:
     if not meta or not schema:
         raise ValueError("Expected non-empty meta and schema")
     keys = set(meta.keys())
-    expected = set(
-        {
-            "id",
-            "title",
-            "examples",
-            "frequency",
-            "distros",
-            "description",
-            "name",
-        }
-    )
+    expected = {
+        "id",
+        "title",
+        "examples",
+        "frequency",
+        "distros",
+        "description",
+        "name",
+    }
+
     error_message = ""
     if expected - keys:
-        error_message = "Missing expected keys in module meta: {}".format(
-            expected - keys
-        )
+        error_message = f"Missing expected keys in module meta: {expected - keys}"
     elif keys - expected:
-        error_message = (
-            "Additional unexpected keys found in module meta: {}".format(
-                keys - expected
-            )
-        )
+        error_message = f"Additional unexpected keys found in module meta: {keys - expected}"
+
     if error_message:
         raise KeyError(error_message)
 
@@ -616,8 +600,7 @@ def get_meta_doc(meta: MetaSchema, schema: dict = None) -> str:
     meta_copy["distros"] = ", ".join(meta["distros"])
     # Need an underbar of the same length as the name
     meta_copy["title_underbar"] = re.sub(r".", "-", meta["name"])
-    template = SCHEMA_DOC_TMPL.format(**meta_copy)
-    return template
+    return SCHEMA_DOC_TMPL.format(**meta_copy)
 
 
 def get_modules() -> dict:
@@ -632,14 +615,11 @@ def load_doc(requested_modules: list) -> str:
     """
     docs = ""
     all_modules = list(get_modules().values()) + ["all"]
-    invalid_docs = set(requested_modules).difference(set(all_modules))
-    if invalid_docs:
+    if invalid_docs := set(requested_modules).difference(set(all_modules)):
         error(
-            "Invalid --docs value {}. Must be one of: {}".format(
-                list(invalid_docs),
-                ", ".join(all_modules),
-            )
+            f'Invalid --docs value {list(invalid_docs)}. Must be one of: {", ".join(all_modules)}'
         )
+
     for mod_name in all_modules:
         if "all" in requested_modules or mod_name in requested_modules:
             (mod_locs, _) = importer.find_module(
@@ -691,7 +671,7 @@ def get_schema() -> dict:
 
 def get_meta() -> dict:
     """Return metadata coalesced from all cc_* cloud-config module."""
-    full_meta = dict()
+    full_meta = {}
     for (_, mod_name) in get_modules().items():
         mod_locs, _ = importer.find_module(
             mod_name, ["cloudinit.config"], ["meta"]
@@ -757,10 +737,7 @@ def handle_schema_args(name, args):
         except RuntimeError as e:
             error(str(e))
         else:
-            if args.config_file is None:
-                cfg_name = "system userdata"
-            else:
-                cfg_name = args.config_file
+            cfg_name = "system userdata" if args.config_file is None else args.config_file
             print("Valid cloud-config:", cfg_name)
     elif args.docs:
         print(load_doc(args.docs))

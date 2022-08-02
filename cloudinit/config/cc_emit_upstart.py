@@ -67,7 +67,7 @@ def handle(name, _cfg, cloud, log, args):
 
     cfgpath = cloud.paths.get_ipath_cur("cloud_config")
     for n in event_names:
-        cmd = ["initctl", "emit", str(n), "CLOUD_CFG=%s" % cfgpath]
+        cmd = ["initctl", "emit", str(n), f"CLOUD_CFG={cfgpath}"]
         try:
             subp.subp(cmd)
         except Exception as e:

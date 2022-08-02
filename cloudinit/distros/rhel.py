@@ -18,10 +18,7 @@ LOG = logging.getLogger(__name__)
 
 
 def _make_sysconfig_bool(val):
-    if val:
-        return "yes"
-    else:
-        return "no"
+    return "yes" if val else "no"
 
 
 class Distro(distros.Distro):
@@ -67,9 +64,8 @@ class Distro(distros.Distro):
             if not out_fn:
                 out_fn = self.systemd_locale_conf_fn
             out_fn = self.systemd_locale_conf_fn
-        else:
-            if not out_fn:
-                out_fn = self.locale_conf_fn
+        elif not out_fn:
+            out_fn = self.locale_conf_fn
         locale_cfg = {
             "LANG": locale,
         }
@@ -100,16 +96,10 @@ class Distro(distros.Distro):
             return util.load_file(filename).strip()
         elif self.uses_systemd():
             (out, _err) = subp.subp(["hostname"])
-            if len(out):
-                return out
-            else:
-                return default
+            return out if len(out) else default
         else:
             (_exists, contents) = rhel_util.read_sysconfig_file(filename)
-            if "HOSTNAME" in contents:
-                return contents["HOSTNAME"]
-            else:
-                return default
+            return contents["HOSTNAME"] if "HOSTNAME" in contents else default
 
     def set_timezone(self, tz):
         tz_file = self._find_tz_file(tz)

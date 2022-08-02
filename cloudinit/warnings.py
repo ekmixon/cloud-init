@@ -118,10 +118,7 @@ def show_warning(name, cfg=None, sleep=None, mode=True, **kwargs):
 
     fmt = "# %%-%ds #" % msgwidth
     topline = "*" * linewidth + "\n"
-    fmtlines = []
-    for line in msg.strip("\n").splitlines():
-        fmtlines.append(fmt % line)
-
+    fmtlines = [fmt % line for line in msg.strip("\n").splitlines()]
     closeline = topline
     if sleep:
         sleepmsg = "  [sleeping for %d seconds]  " % sleep

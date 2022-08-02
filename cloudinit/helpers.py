@@ -138,7 +138,7 @@ class FileSemaphores(object):
         if not freq or freq == PER_INSTANCE:
             return os.path.join(sem_path, name)
         else:
-            return os.path.join(sem_path, "%s.%s" % (name, freq))
+            return os.path.join(sem_path, f"{name}.{freq}")
 
 
 class Runners(object):
@@ -176,14 +176,10 @@ class Runners(object):
             return (False, None)
         with sem.lock(name, freq, clear_on_fail) as lk:
             if not lk:
-                raise LockFailure("Failed to acquire lock for %s" % name)
-            else:
-                LOG.debug("Running %s using lock (%s)", name, lk)
-                if isinstance(args, (dict)):
-                    results = functor(**args)
-                else:
-                    results = functor(*args)
-                return (True, results)
+                raise LockFailure(f"Failed to acquire lock for {name}")
+            LOG.debug("Running %s using lock (%s)", name, lk)
+            results = functor(**args) if isinstance(args, (dict)) else functor(*args)
+            return (True, results)
 
 
 class ConfigMerger(object):
@@ -237,12 +233,7 @@ class ConfigMerger(object):
 
         cc_paths = ["cloud_config"]
         if self._include_vendor:
-            # the order is important here: we want vendor2
-            #  (dynamic vendor data from OpenStack)
-            #  to override vendor (static data from OpenStack)
-            cc_paths.append("vendor2_cloud_config")
-            cc_paths.append("vendor_cloud_config")
-
+            cc_paths.extend(("vendor2_cloud_config", "vendor_cloud_config"))
         for cc_p in cc_paths:
             cc_fn = self._paths.get_ipath_cur(cc_p)
             if cc_fn and os.path.isfile(cc_fn):
@@ -307,13 +298,12 @@ class ContentHandlers(object):
         return content_type in self.registered
 
     def register(self, mod, initialized=False, overwrite=True):
-        types = set()
-        for t in mod.list_types():
-            if overwrite:
-                types.add(t)
-            else:
-                if not self.is_registered(t):
-                    types.add(t)
+        types = {
+            t
+            for t in mod.list_types()
+            if not overwrite and not self.is_registered(t) or overwrite
+        }
+
         for t in types:
             self.registered[t] = mod
         if initialized and mod not in self.initialized:
@@ -397,8 +387,7 @@ class Paths(persistence.CloudInitPickleMixin):
             return None
         path_safe_iid = str(iid).replace(os.sep, "_")
         ipath = os.path.join(self.cloud_dir, "instances", path_safe_iid)
-        add_on = self.lookups.get(name)
-        if add_on:
+        if add_on := self.lookups.get(name):
             ipath = os.path.join(ipath, add_on)
         return ipath
 
@@ -406,20 +395,16 @@ class Paths(persistence.CloudInitPickleMixin):
     # (/var/lib/cloud/instances/<instance>/<name>)
     # returns None + warns if no active datasource....
     def get_ipath(self, name=None):
-        ipath = self._get_ipath(name)
-        if not ipath:
-            LOG.warning(
-                "No per instance data available, "
-                "is there an datasource/iid set?"
-            )
-            return None
-        else:
+        if ipath := self._get_ipath(name):
             return ipath
+        LOG.warning(
+            "No per instance data available, "
+            "is there an datasource/iid set?"
+        )
+        return None
 
     def _get_path(self, base, name=None):
-        if name is None:
-            return base
-        return os.path.join(base, self.lookups[name])
+        return base if name is None else os.path.join(base, self.lookups[name])
 
     def get_runpath(self, name=None):
         return self._get_path(self.run_dir, name)
@@ -443,12 +428,8 @@ class DefaultingConfigParser(RawConfigParser):
 
     def get(self, section, option):
         value = self.DEF_BASE
-        try:
+        with contextlib.suppress(NoSectionError, NoOptionError):
             value = RawConfigParser.get(self, section, option)
-        except NoSectionError:
-            pass
-        except NoOptionError:
-            pass
         return value
 
     def set(self, section, option, value=None):
@@ -461,19 +442,25 @@ class DefaultingConfigParser(RawConfigParser):
             RawConfigParser.remove_option(self, section, option)
 
     def getboolean(self, section, option):
-        if not self.has_option(section, option):
-            return self.DEF_BOOLEAN
-        return RawConfigParser.getboolean(self, section, option)
+        return (
+            RawConfigParser.getboolean(self, section, option)
+            if self.has_option(section, option)
+            else self.DEF_BOOLEAN
+        )
 
     def getfloat(self, section, option):
-        if not self.has_option(section, option):
-            return self.DEF_FLOAT
-        return RawConfigParser.getfloat(self, section, option)
+        return (
+            RawConfigParser.getfloat(self, section, option)
+            if self.has_option(section, option)
+            else self.DEF_FLOAT
+        )
 
     def getint(self, section, option):
-        if not self.has_option(section, option):
-            return self.DEF_INT
-        return RawConfigParser.getint(self, section, option)
+        return (
+            RawConfigParser.getint(self, section, option)
+            if self.has_option(section, option)
+            else self.DEF_INT
+        )
 
     def stringify(self, header=None):
         contents = ""

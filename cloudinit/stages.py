@@ -76,10 +76,7 @@ def update_event_enabled(
     )
     LOG.debug("Allowed events: %s", allowed)
 
-    if not scope:
-        scopes = allowed.keys()
-    else:
-        scopes = [scope]
+    scopes = [scope] if scope else allowed.keys()
     scope_values = [s.value for s in scopes]
 
     for evt_scope in scopes:
@@ -175,7 +172,7 @@ class Init(object):
     def _initial_subdirs(self):
         c_dir = self.paths.cloud_dir
         run_dir = self.paths.run_dir
-        initial_dirs = [
+        return [
             c_dir,
             os.path.join(c_dir, "scripts"),
             os.path.join(c_dir, "scripts", "per-instance"),
@@ -189,7 +186,6 @@ class Init(object):
             os.path.join(c_dir, "data"),
             os.path.join(run_dir, "sem"),
         ]
-        return initial_dirs
 
     def purge_cache(self, rm_instance_lnk=False):
         rm_list = [self.paths.boot_finished]
@@ -204,8 +200,7 @@ class Init(object):
 
     def _initialize_filesystem(self):
         util.ensure_dirs(self._initial_subdirs())
-        log_file = util.get_cfg_option_str(self.cfg, "def_log_file")
-        if log_file:
+        if log_file := util.get_cfg_option_str(self.cfg, "def_log_file"):
             util.ensure_file(log_file, mode=0o640, preserve_mode=True)
             perms = self.cfg.get("syslog_fix_perms")
             if not perms:
@@ -276,7 +271,7 @@ class Init(object):
 
     def _restore_from_checked_cache(self, existing):
         if existing not in ("check", "trust"):
-            raise ValueError("Unexpected value for existing: %s" % existing)
+            raise ValueError(f"Unexpected value for existing: {existing}")
 
         ds = self._restore_from_cache()
         if not ds:
@@ -289,26 +284,22 @@ class Init(object):
             run_iid = None
 
         if run_iid == ds.get_instance_id():
-            return (ds, "restored from cache with run check: %s" % ds)
+            return ds, f"restored from cache with run check: {ds}"
         elif existing == "trust":
-            return (ds, "restored from cache: %s" % ds)
+            return ds, f"restored from cache: {ds}"
         else:
             if hasattr(ds, "check_instance_id") and ds.check_instance_id(
                 self.cfg
             ):
-                return (ds, "restored from checked cache: %s" % ds)
+                return ds, f"restored from checked cache: {ds}"
             else:
-                return (None, "cache invalid in datasource: %s" % ds)
+                return None, f"cache invalid in datasource: {ds}"
 
     def _get_data_source(self, existing) -> sources.DataSource:
         if self.datasource is not NULL_DATA_SOURCE:
             return self.datasource
 
-        with events.ReportEventStack(
-            name="check-cache",
-            description="attempting to read from cache [%s]" % existing,
-            parent=self.reporter,
-        ) as myrep:
+        with events.ReportEventStack(name="check-cache", description=f"attempting to read from cache [{existing}]", parent=self.reporter) as myrep:
 
             ds, desc = self._restore_from_checked_cache(existing)
             myrep.description = desc
@@ -340,16 +331,13 @@ class Init(object):
         return ["handlers", "scripts", "sem"]
 
     def _get_ipath(self, subname=None):
-        # Force a check to see if anything
-        # actually comes back, if not
-        # then a datasource has not been assigned...
-        instance_dir = self.paths.get_ipath(subname)
-        if not instance_dir:
+        if instance_dir := self.paths.get_ipath(subname):
+            return instance_dir
+        else:
             raise RuntimeError(
                 "No instance directory is available."
                 " Has a datasource been fetched??"
             )
-        return instance_dir
 
     def _reflect_cur_instance(self):
         # Remove the old symlink and attach a new one so
@@ -359,9 +347,7 @@ class Init(object):
         util.sym_link(idir, self.paths.instance_link)
 
         # Ensures these dirs exist
-        dir_list = []
-        for d in self._get_instance_subdirs():
-            dir_list.append(os.path.join(idir, d))
+        dir_list = [os.path.join(idir, d) for d in self._get_instance_subdirs()]
         util.ensure_dirs(dir_list)
 
         # Write out information on what is being used for the current instance
@@ -369,7 +355,7 @@ class Init(object):
         dp = self.paths.get_cpath("data")
 
         # Write what the datasource was and is..
-        ds = "%s: %s" % (type_utils.obj_name(self.datasource), self.datasource)
+        ds = f"{type_utils.obj_name(self.datasource)}: {self.datasource}"
         previous_ds = None
         ds_fn = os.path.join(idir, "datasource")
         try:
@@ -422,11 +408,10 @@ class Init(object):
         even on first boot.
         """
         previous = self.previous_iid()
-        ret = (
+        return (
             previous == NO_PREVIOUS_INSTANCE_ID
             or previous != self.datasource.get_instance_id()
         )
-        return ret
 
     def fetch(self, existing="check"):
         return self._get_data_source(existing=existing)
@@ -486,7 +471,7 @@ class Init(object):
         # Raw data is bytes, not a string
         if data is None:
             data = b""
-        util.write_file(self._get_ipath("%s_raw" % datasource), data, 0o600)
+        util.write_file(self._get_ipath(f"{datasource}_raw"), data, 0o600)
 
     def _store_raw_vendordata(self, data, datasource):
         # Only these data types
@@ -1075,9 +1060,9 @@ class Modules(object):
                 # Mark it as having started running
                 which_ran.append(name)
                 # This name will affect the semaphore name created
-                run_name = "config-%s" % (name)
+                run_name = f"config-{name}"
 
-                desc = "running %s with frequency %s" % (run_name, freq)
+                desc = f"running {run_name} with frequency {freq}"
                 myrep = events.ReportEventStack(
                     name=run_name, description=desc, parent=self.reporter
                 )
@@ -1087,9 +1072,9 @@ class Modules(object):
                         run_name, mod.handle, func_args, freq=freq
                     )
                     if ran:
-                        myrep.message = "%s ran successfully" % run_name
+                        myrep.message = f"{run_name} ran successfully"
                     else:
-                        myrep.message = "%s previously ran" % run_name
+                        myrep.message = f"{run_name} previously ran"
 
             except Exception as e:
                 util.logexc(LOG, "Running module %s (%s) failed", name, mod)
@@ -1117,7 +1102,7 @@ class Modules(object):
         forced = []
         overridden = self.cfg.get("unverified_modules", [])
         active_mods = []
-        all_distros = set([distros.ALL_DISTROS])
+        all_distros = {distros.ALL_DISTROS}
         for (mod, name, _freq, _args) in mostly_mods:
             worked_distros = set(mod.distros)  # Minimally [] per fixup_modules
             worked_distros.update(
@@ -1129,12 +1114,15 @@ class Modules(object):
             #  - the current d_name isn't in distros
             #  - and the module is unverified and not in the unverified_modules
             #    override list
-            if worked_distros and worked_distros != all_distros:
-                if d_name not in worked_distros:
-                    if name not in overridden:
-                        skipped.append(name)
-                        continue
-                    forced.append(name)
+            if (
+                worked_distros
+                and worked_distros != all_distros
+                and d_name not in worked_distros
+            ):
+                if name not in overridden:
+                    skipped.append(name)
+                    continue
+                forced.append(name)
             active_mods.append([mod, name, _freq, _args])
 
         if skipped:

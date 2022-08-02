@@ -158,6 +158,7 @@ config flags are:
     ssh_quiet_keygen: <true/false>
 """
 
+
 import glob
 import os
 import sys
@@ -175,14 +176,14 @@ HOST_KEY_PUBLISH_BLACKLIST = ["dsa"]
 CONFIG_KEY_TO_FILE = {}
 PRIV_TO_PUB = {}
 for k in GENERATE_KEY_NAMES:
-    CONFIG_KEY_TO_FILE.update({"%s_private" % k: (KEY_FILE_TPL % k, 0o600)})
-    CONFIG_KEY_TO_FILE.update(
-        {"%s_public" % k: (KEY_FILE_TPL % k + ".pub", 0o600)}
+    CONFIG_KEY_TO_FILE[f"{k}_private"] = (KEY_FILE_TPL % k, 0o600)
+    CONFIG_KEY_TO_FILE[f"{k}_public"] = (KEY_FILE_TPL % k + ".pub", 0o600)
+    CONFIG_KEY_TO_FILE[f"{k}_certificate"] = (
+        KEY_FILE_TPL % k + "-cert.pub",
+        0o600,
     )
-    CONFIG_KEY_TO_FILE.update(
-        {"%s_certificate" % k: (KEY_FILE_TPL % k + "-cert.pub", 0o600)}
-    )
-    PRIV_TO_PUB["%s_private" % k] = "%s_public" % k
+
+    PRIV_TO_PUB[f"{k}_private"] = f"{k}_public"
 
 KEY_GEN_TPL = 'o=$(ssh-keygen -yf "%s") && echo "$o" root@localhost > "%s"'
 
@@ -264,7 +265,7 @@ def handle(_name, cfg, cloud, log, _args):
                         # perform same "sanitize permissions" as sshd-keygen
                         os.chown(keyfile, -1, gid)
                         os.chmod(keyfile, 0o640)
-                        os.chmod(keyfile + ".pub", 0o644)
+                        os.chmod(f"{keyfile}.pub", 0o644)
                 except subp.ProcessExecutionError as e:
                     err = util.decode_binary(e.stderr).lower()
                     if e.exit_code == 1 and err.lower().startswith(
@@ -349,7 +350,7 @@ def get_public_host_keys(blacklist=None):
     @returns: List of keys, each formatted as a two-element tuple.
         e.g. [('ssh-rsa', 'AAAAB3Nz...'), ('ssh-ed25519', 'AAAAC3Nx...')]
     """
-    public_key_file_tmpl = "%s.pub" % (KEY_FILE_TPL,)
+    public_key_file_tmpl = f"{KEY_FILE_TPL}.pub"
     key_list = []
     blacklist_files = []
     if blacklist:

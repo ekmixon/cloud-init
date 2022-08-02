@@ -84,19 +84,12 @@ def translate_network(settings):
     # Figure out where each iface section is
     ifaces = []
     consume = {}
-    for (cmd, args) in entries:
-        if cmd == "iface":
-            if consume:
-                ifaces.append(consume)
-                consume = {}
-            consume[cmd] = args
-        else:
-            consume[cmd] = args
-    # Check if anything left over to consume
-    absorb = False
-    for (cmd, args) in consume.items():
-        if cmd == "iface":
-            absorb = True
+    for cmd, args in entries:
+        if cmd == "iface" and consume:
+            ifaces.append(consume)
+            consume = {}
+        consume[cmd] = args
+    absorb = any(cmd == "iface" for cmd, args in consume.items())
     if absorb:
         ifaces.append(consume)
     # Now translate
@@ -111,13 +104,11 @@ def translate_network(settings):
             use_ipv6 = True
         dev_name = None
         if len(iface_details) >= 1:
-            dev = iface_details[0].strip().lower()
-            if dev:
+            if dev := iface_details[0].strip().lower():
                 dev_name = dev
         if not dev_name:
             continue
-        iface_info = {}
-        iface_info["ipv6"] = {}
+        iface_info = {"ipv6": {}}
         if len(iface_details) >= 3:
             proto_type = iface_details[2].strip().lower()
             # Seems like this can be 'loopback' which we don't
@@ -128,28 +119,25 @@ def translate_network(settings):
         if use_ipv6:
             for k in ["address", "gateway"]:
                 if k in info:
-                    val = info[k].strip().lower()
-                    if val:
+                    if val := info[k].strip().lower():
                         iface_info["ipv6"][k] = val
         else:
             for k in ["netmask", "address", "gateway", "broadcast"]:
                 if k in info:
-                    val = info[k].strip().lower()
-                    if val:
+                    if val := info[k].strip().lower():
                         iface_info[k] = val
             # handle static ip configurations using
             # ipaddress/prefix-length format
-            if "address" in iface_info:
-                if "netmask" not in iface_info:
-                    # check if the address has a network prefix
-                    addr, _, prefix = iface_info["address"].partition("/")
-                    if prefix:
-                        iface_info["netmask"] = net_prefix_to_ipv4_mask(prefix)
-                        iface_info["address"] = addr
-                        # if we set the netmask, we also can set the broadcast
-                        iface_info["broadcast"] = mask_and_ipv4_to_bcast_addr(
-                            iface_info["netmask"], addr
-                        )
+            if "address" in iface_info and "netmask" not in iface_info:
+                # check if the address has a network prefix
+                addr, _, prefix = iface_info["address"].partition("/")
+                if prefix:
+                    iface_info["netmask"] = net_prefix_to_ipv4_mask(prefix)
+                    iface_info["address"] = addr
+                    # if we set the netmask, we also can set the broadcast
+                    iface_info["broadcast"] = mask_and_ipv4_to_bcast_addr(
+                        iface_info["netmask"], addr
+                    )
 
             # Name server info provided??
             if "dns-nameservers" in info:
@@ -162,8 +150,7 @@ def translate_network(settings):
                 hw_info = info["hwaddress"].lower().strip()
                 hw_split = hw_info.split(None, 1)
                 if len(hw_split) == 2 and hw_split[0].startswith("ether"):
-                    hw_addr = hw_split[1]
-                    if hw_addr:
+                    if hw_addr := hw_split[1]:
                         iface_info["hwaddress"] = hw_addr
         # If ipv6 is enabled, device will have multiple IPs, so we need to
         # update the dictionary instead of overwriting it...
@@ -172,16 +159,13 @@ def translate_network(settings):
         else:
             real_ifaces[dev_name] = iface_info
     # Check for those that should be started on boot via 'auto'
-    for (cmd, args) in entries:
+    for cmd, args in entries:
         args = args.split(None)
         if not args:
             continue
         dev_name = args[0].strip().lower()
-        if cmd == "auto":
-            # Seems like auto can be like 'auto eth0 eth0:1' so just get the
-            # first part out as the device name
-            if dev_name in real_ifaces:
-                real_ifaces[dev_name]["auto"] = True
+        if cmd == "auto" and dev_name in real_ifaces:
+            real_ifaces[dev_name]["auto"] = True
         if cmd == "iface" and "inet6" in args:
             real_ifaces[dev_name]["inet6"] = True
     return real_ifaces

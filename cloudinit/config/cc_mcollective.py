@@ -79,12 +79,11 @@ def configure(
     except IOError as e:
         if e.errno != errno.ENOENT:
             raise
-        else:
-            LOG.debug(
-                "Did not find file %s (starting with an empty config)",
-                server_cfg,
-            )
-            mcollective_config = ConfigObj()
+        LOG.debug(
+            "Did not find file %s (starting with an empty config)",
+            server_cfg,
+        )
+        mcollective_config = ConfigObj()
     for (cfg_name, cfg) in config.items():
         if cfg_name == "public-cert":
             util.write_file(pubcert_file, cfg, mode=0o644)
@@ -94,30 +93,26 @@ def configure(
             util.write_file(pricert_file, cfg, mode=0o600)
             mcollective_config["plugin.ssl_server_private"] = pricert_file
             mcollective_config["securityprovider"] = "ssl"
+        elif isinstance(cfg, str):
+            # Just set it in the 'main' section
+            mcollective_config[cfg_name] = cfg
+        elif isinstance(cfg, (dict)):
+            # Iterate through the config items, create a section if
+            # it is needed and then add/or create items as needed
+            if cfg_name not in mcollective_config.sections:
+                mcollective_config[cfg_name] = {}
+            for (o, v) in cfg.items():
+                mcollective_config[cfg_name][o] = v
         else:
-            if isinstance(cfg, str):
-                # Just set it in the 'main' section
-                mcollective_config[cfg_name] = cfg
-            elif isinstance(cfg, (dict)):
-                # Iterate through the config items, create a section if
-                # it is needed and then add/or create items as needed
-                if cfg_name not in mcollective_config.sections:
-                    mcollective_config[cfg_name] = {}
-                for (o, v) in cfg.items():
-                    mcollective_config[cfg_name][o] = v
-            else:
-                # Otherwise just try to convert it to a string
-                mcollective_config[cfg_name] = str(cfg)
+            # Otherwise just try to convert it to a string
+            mcollective_config[cfg_name] = str(cfg)
 
     try:
         # We got all our config as wanted we'll copy
         # the previous server.cfg and overwrite the old with our new one
-        util.copy(server_cfg, "%s.old" % (server_cfg))
+        util.copy(server_cfg, f"{server_cfg}.old")
     except IOError as e:
-        if e.errno == errno.ENOENT:
-            # Doesn't exist to copy...
-            pass
-        else:
+        if e.errno != errno.ENOENT:
             raise
 
     # Now we got the whole (new) file, write to disk...

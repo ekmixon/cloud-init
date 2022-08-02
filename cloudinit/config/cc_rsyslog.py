@@ -296,7 +296,7 @@ def parse_remotes_line(line, name=None):
     elif len(toks) == 2:
         match, host_port = toks
     else:
-        raise ValueError("line had multiple spaces: %s" % data)
+        raise ValueError(f"line had multiple spaces: {data}")
 
     toks = HOST_PORT_RE.match(host_port)
 
@@ -308,7 +308,7 @@ def parse_remotes_line(line, name=None):
     port = toks.group("port")
 
     if addr.startswith("[") and not addr.endswith("]"):
-        raise ValueError("host spec had invalid brackets: %s" % addr)
+        raise ValueError(f"host spec had invalid brackets: {addr}")
 
     if comment and not name:
         name = comment
@@ -337,10 +337,7 @@ class SyslogRemotesLine(object):
         self.proto = proto
 
         self.addr = addr
-        if port:
-            self.port = int(port)
-        else:
-            self.port = None
+        self.port = int(port) if port else None
 
     def validate(self):
         if self.port:
@@ -355,31 +352,21 @@ class SyslogRemotesLine(object):
             raise ValueError("address is required")
 
     def __repr__(self):
-        return "[name=%s match=%s proto=%s address=%s port=%s]" % (
-            self.name,
-            self.match,
-            self.proto,
-            self.addr,
-            self.port,
-        )
+        return f"[name={self.name} match={self.match} proto={self.proto} address={self.addr} port={self.port}]"
 
     def __str__(self):
-        buf = self.match + " "
-        if self.proto == "udp":
-            buf += "@"
-        elif self.proto == "tcp":
+        buf = f"{self.match} "
+        if self.proto == "tcp":
             buf += "@@"
 
-        if ":" in self.addr:
-            buf += "[" + self.addr + "]"
-        else:
-            buf += self.addr
-
+        elif self.proto == "udp":
+            buf += "@"
+        buf += f"[{self.addr}]" if ":" in self.addr else self.addr
         if self.port:
-            buf += ":%s" % self.port
+            buf += f":{self.port}"
 
         if self.name:
-            buf += " # %s" % self.name
+            buf += f" # {self.name}"
         return buf
 
 

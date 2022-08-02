@@ -139,8 +139,7 @@ def handle(name, cfg, cloud, log, args):
     if post_list == "all":
         post_list = POST_LIST_ALL
 
-    all_keys = {}
-    all_keys["instance_id"] = cloud.get_instance_id()
+    all_keys = {"instance_id": cloud.get_instance_id()}
     all_keys["hostname"] = cloud.get_hostname()
     all_keys["fqdn"] = cloud.get_hostname(fqdn=True)
 
@@ -172,12 +171,9 @@ def handle(name, cfg, cloud, log, args):
             )
 
     # Get them read to be posted
-    real_submit_keys = {}
-    for (k, v) in submit_keys.items():
-        if v is None:
-            real_submit_keys[k] = "N/A"
-        else:
-            real_submit_keys[k] = str(v)
+    real_submit_keys = {
+        k: "N/A" if v is None else str(v) for k, v in submit_keys.items()
+    }
 
     # Incase the url is parameterized
     url_params = {

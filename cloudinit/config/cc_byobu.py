@@ -58,8 +58,8 @@ def handle(name, cfg, cloud, log, args):
         log.debug("Skipping module named %s, no 'byobu' values found", name)
         return
 
-    if value == "user" or value == "system":
-        value = "enable-%s" % value
+    if value in ["user", "system"]:
+        value = f"enable-{value}"
 
     valid = (
         "enable-user",
@@ -104,7 +104,7 @@ def handle(name, cfg, cloud, log, args):
         shcmd += " || X=$(($X+1)); "
 
     if len(shcmd):
-        cmd = ["/bin/sh", "-c", "%s %s %s" % ("X=0;", shcmd, "exit $X")]
+        cmd = ["/bin/sh", "-c", f"X=0; {shcmd} exit $X"]
         log.debug("Setting byobu to %s", value)
         subp.subp(cmd, capture=False)
 

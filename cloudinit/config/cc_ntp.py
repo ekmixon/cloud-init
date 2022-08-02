@@ -429,7 +429,7 @@ def rename_ntp_conf(confpath=None):
     configuration file.
     """
     if os.path.exists(confpath):
-        util.rename(confpath, confpath + ".dist")
+        util.rename(confpath, f"{confpath}.dist")
 
 
 def generate_server_names(distro):
@@ -439,26 +439,21 @@ def generate_server_names(distro):
     @param distro: string.  Specify the distro name
     @returns: list: A list of strings representing ntp servers for this distro.
     """
-    names = []
     pool_distro = distro
 
-    if distro == "sles":
+    if pool_distro == "sles":
         # For legal reasons x.pool.sles.ntp.org does not exist,
         # use the opensuse pool
         pool_distro = "opensuse"
-    elif distro == "alpine" or distro == "eurolinux":
+    elif pool_distro in ["alpine", "eurolinux"]:
         # Alpine-specific pool (i.e. x.alpine.pool.ntp.org) does not exist
         # so use general x.pool.ntp.org instead. The same applies to EuroLinux
         pool_distro = ""
 
-    for x in range(0, NR_POOL_SERVERS):
-        names.append(
-            ".".join(
-                [n for n in [str(x)] + [pool_distro] + ["pool.ntp.org"] if n]
-            )
-        )
-
-    return names
+    return [
+        ".".join([n for n in [str(x)] + [pool_distro] + ["pool.ntp.org"] if n])
+        for x in range(NR_POOL_SERVERS)
+    ]
 
 
 def write_ntp_config_template(
@@ -536,8 +531,7 @@ def supplemental_schema_validation(ntp_config):
     @raises: ValueError describing invalid values provided.
     """
     errors = []
-    missing = REQUIRED_NTP_CONFIG_KEYS.difference(set(ntp_config.keys()))
-    if missing:
+    if missing := REQUIRED_NTP_CONFIG_KEYS.difference(set(ntp_config.keys())):
         keys = ", ".join(sorted(missing))
         errors.append(
             "Missing required ntp:config keys: {keys}".format(keys=keys)
@@ -550,7 +544,7 @@ def supplemental_schema_validation(ntp_config):
             " are required"
         )
     for key, value in sorted(ntp_config.items()):
-        keypath = "ntp:config:" + key
+        keypath = f"ntp:config:{key}"
         if key == "confpath":
             if not all([value, isinstance(value, str)]):
                 errors.append(
@@ -631,10 +625,8 @@ def handle(name, cfg, cloud, log, _args):
         )
         template_fn = cloud.get_template_filename(template_name)
         if not template_fn:
-            msg = (
-                "No template found, not rendering %s"
-                % ntp_client_config.get("template_name")
-            )
+            msg = f'No template found, not rendering {ntp_client_config.get("template_name")}'
+
             raise RuntimeError(msg)
 
     write_ntp_config_template(

@@ -2,6 +2,7 @@
 
 """ubuntu_advantage: Configure Ubuntu Advantage support services"""
 
+
 from textwrap import dedent
 
 from cloudinit import log as logging
@@ -89,8 +90,7 @@ schema = {
                 },
                 "token": {
                     "type": "string",
-                    "description": "A contract token obtained from %s."
-                    % UA_URL,
+                    "description": f"A contract token obtained from {UA_URL}.",
                 },
             },
             "required": ["token"],
@@ -98,6 +98,7 @@ schema = {
         }
     },
 }
+
 
 __doc__ = get_meta_doc(meta, schema)  # Supplement python help()
 
@@ -153,9 +154,7 @@ def configure_ua(token=None, enable=None):
             util.logexc(LOG, msg)
         raise RuntimeError(
             "Failure enabling Ubuntu Advantage service(s): {}".format(
-                ", ".join(
-                    '"{}"'.format(service) for service, _ in enable_errors
-                )
+                ", ".join(f'"{service}"' for service, _ in enable_errors)
             )
         )
 

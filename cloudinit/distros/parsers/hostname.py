@@ -23,9 +23,7 @@ class HostnameConf(object):
         self.parse()
         contents = StringIO()
         for (line_type, components) in self._contents:
-            if line_type == "blank":
-                contents.write("%s\n" % (components[0]))
-            elif line_type == "all_comment":
+            if line_type in ["blank", "all_comment"]:
                 contents.write("%s\n" % (components[0]))
             elif line_type == "hostname":
                 (hostname, tail) = components
@@ -39,10 +37,14 @@ class HostnameConf(object):
     @property
     def hostname(self):
         self.parse()
-        for (line_type, components) in self._contents:
-            if line_type == "hostname":
-                return components[0]
-        return None
+        return next(
+            (
+                components[0]
+                for line_type, components in self._contents
+                if line_type == "hostname"
+            ),
+            None,
+        )
 
     def set_hostname(self, your_hostname):
         your_hostname = your_hostname.strip()
@@ -71,7 +73,7 @@ class HostnameConf(object):
             entries.append(("hostname", [head, tail]))
             hostnames_found.add(head)
         if len(hostnames_found) > 1:
-            raise IOError("Multiple hostnames (%s) found!" % (hostnames_found))
+            raise IOError(f"Multiple hostnames ({hostnames_found}) found!")
         return entries
 
 

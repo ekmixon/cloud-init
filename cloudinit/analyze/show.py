@@ -68,7 +68,7 @@ def format_record(msg, event):
 
 
 def dump_event_files(event):
-    content = dict((k, v) for k, v in event.items() if k not in ["content"])
+    content = {k: v for k, v in event.items() if k not in ["content"]}
     files = content["files"]
     saved = []
     for f in files:
@@ -82,21 +82,15 @@ def dump_event_files(event):
 
 
 def event_name(event):
-    if event:
-        return event.get("name")
-    return None
+    return event.get("name") if event else None
 
 
 def event_type(event):
-    if event:
-        return event.get("event_type")
-    return None
+    return event.get("event_type") if event else None
 
 
 def event_parent(event):
-    if event:
-        return event_name(event).split("/")[0]
-    return None
+    return event_name(event).split("/")[0] if event else None
 
 
 def event_timestamp(event):
@@ -175,9 +169,9 @@ class SystemctlReader(object):
         # sure both scenarios throw exceptions
         if self.failure:
             raise RuntimeError(
-                "Subprocess call to systemctl has failed, "
-                "returning error code ({})".format(self.failure)
+                f"Subprocess call to systemctl has failed, returning error code ({self.failure})"
             )
+
         # Output from systemctl show has the format Property=Value.
         # For example, UserspaceMonotonic=1929304
         timestamp = self.epoch.split("=")[1]
@@ -270,9 +264,9 @@ def gather_timestamps_using_systemd():
                     kernel_start = file_stat.st_atime
                 except OSError as err:
                     raise RuntimeError(
-                        "Could not determine container boot "
-                        "time from /proc/1/cmdline. ({})".format(err)
+                        f"Could not determine container boot time from /proc/1/cmdline. ({err})"
                     ) from err
+
                 status = CONTAINER_CODE
             else:
                 status = FAIL_CODE
@@ -318,7 +312,7 @@ def generate_records(
     boot_records = []
 
     unprocessed = []
-    for e in range(0, len(sorted_events)):
+    for e in range(len(sorted_events)):
         event = events[e]
         try:
             next_evt = events[e + 1]
@@ -349,7 +343,7 @@ def generate_records(
                     )
             else:
                 # This is a parent event
-                records.append("Starting stage: %s" % event.get("name"))
+                records.append(f'Starting stage: {event.get("name")}')
                 unprocessed.append(event)
                 stages_seen.append(event.get("name"))
                 continue

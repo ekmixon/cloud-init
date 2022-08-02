@@ -122,9 +122,7 @@ def _format_repo_value(val):
         return 1 if val else 0
     if isinstance(val, (list, tuple)):
         return "\n    ".join([_format_repo_value(v) for v in val])
-    if not isinstance(val, str):
-        return str(val)
-    return val
+    return val if isinstance(val, str) else str(val)
 
 
 def _format_repository_config(repo_id, repo_config):
@@ -151,9 +149,7 @@ def _write_repos(repos, repo_base_path):
         return
     valid_repos = {}
     for index, user_repo_config in enumerate(repos):
-        # Skip on absent required keys
-        missing_keys = set(["id", "baseurl"]).difference(set(user_repo_config))
-        if missing_keys:
+        if missing_keys := {"id", "baseurl"}.difference(set(user_repo_config)):
             LOG.warning(
                 "Repo config at index %d is missing required config keys: %s",
                 index,
@@ -162,7 +158,7 @@ def _write_repos(repos, repo_base_path):
             continue
         repo_id = user_repo_config.get("id")
         canon_repo_id = _canonicalize_id(repo_id)
-        repo_fn_pth = os.path.join(repo_base_path, "%s.repo" % (canon_repo_id))
+        repo_fn_pth = os.path.join(repo_base_path, f"{canon_repo_id}.repo")
         if os.path.exists(repo_fn_pth):
             LOG.info(
                 "Skipping repo %s, file %s already exists!",
@@ -179,11 +175,12 @@ def _write_repos(repos, repo_base_path):
             continue
 
         # Do some basic key formatting
-        repo_config = dict(
-            (k.lower().strip().replace("-", "_"), v)
+        repo_config = {
+            k.lower().strip().replace("-", "_"): v
             for k, v in user_repo_config.items()
             if k and k != "id"
-        )
+        }
+
 
         # Set defaults if not present
         for field in ["enabled", "autorefresh"]:
@@ -206,12 +203,15 @@ def _write_zypp_config(zypper_config):
     new_settings = ["# Added via cloud.cfg"]
     for setting, value in zypper_config.items():
         if setting == "configdir":
-            msg = "Changing the location of the zypper configuration is "
-            msg += 'not supported, skipping "configdir" setting'
+            msg = (
+                "Changing the location of the zypper configuration is "
+                + 'not supported, skipping "configdir" setting'
+            )
+
             LOG.warning(msg)
             continue
         if value:
-            new_settings.append("%s=%s" % (setting, value))
+            new_settings.append(f"{setting}={value}")
     if len(new_settings) > 1:
         new_config = zypp_conf_content + "\n".join(new_settings)
     else:

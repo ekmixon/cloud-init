@@ -39,10 +39,13 @@ def setupBasicLogging(level=DEBUG, formatter=None):
         formatter = logging.Formatter(DEF_CON_FORMAT)
     root = logging.getLogger()
     for handler in root.handlers:
-        if hasattr(handler, "stream") and hasattr(handler.stream, "name"):
-            if handler.stream.name == "<stderr>":
-                handler.setLevel(level)
-                return
+        if (
+            hasattr(handler, "stream")
+            and hasattr(handler.stream, "name")
+            and handler.stream.name == "<stderr>"
+        ):
+            handler.setLevel(level)
+            return
     # Didn't have an existing stderr handler; create a new handler
     console = logging.StreamHandler(sys.stderr)
     console.setFormatter(formatter)
@@ -90,12 +93,7 @@ def setupLogging(cfg=None):
         try:
             am_tried += 1
             # Assume its just a string if not a filename
-            if log_cfg.startswith("/") and os.path.isfile(log_cfg):
-                # Leave it as a file and do not make it look like
-                # something that is a file (but is really a buffer that
-                # is acting as a file)
-                pass
-            else:
+            if not log_cfg.startswith("/") or not os.path.isfile(log_cfg):
                 log_cfg = io.StringIO(log_cfg)
             # Attempt to load its config
             logging.config.fileConfig(log_cfg)

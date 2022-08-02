@@ -65,9 +65,7 @@ def _format_repo_value(val):
         # Can handle 'lists' in certain cases
         # See: https://linux.die.net/man/5/yum.conf
         return "\n".join([_format_repo_value(v) for v in val])
-    if not isinstance(val, str):
-        return str(val)
-    return val
+    return val if isinstance(val, str) else str(val)
 
 
 # TODO(harlowja): move to distro?
@@ -103,7 +101,7 @@ def handle(name, cfg, _cloud, log, _args):
     repo_configs = {}
     for (repo_id, repo_config) in repos.items():
         canon_repo_id = _canonicalize_id(repo_id)
-        repo_fn_pth = os.path.join(repo_base_path, "%s.repo" % (canon_repo_id))
+        repo_fn_pth = os.path.join(repo_base_path, f"{canon_repo_id}.repo")
         if os.path.exists(repo_fn_pth):
             log.info(
                 "Skipping repo %s, file %s already exists!",
@@ -123,8 +121,7 @@ def handle(name, cfg, _cloud, log, _args):
         # Do some basic sanity checks/cleaning
         n_repo_config = {}
         for (k, v) in repo_config.items():
-            k = k.lower().strip().replace("-", "_")
-            if k:
+            if k := k.lower().strip().replace("-", "_"):
                 n_repo_config[k] = v
         repo_config = n_repo_config
         missing_required = 0

@@ -132,7 +132,7 @@ def collect_logs(tarfile, include_userdata, verbosity=0):
             verbosity,
         )
         if not version:
-            version = dpkg_ver if dpkg_ver else "not-available"
+            version = dpkg_ver or "not-available"
         _debug("collected cloud-init version: %s\n" % version, 1, verbosity)
         _write_command_output_to_file(
             ["dmesg"],
@@ -171,7 +171,7 @@ def collect_logs(tarfile, include_userdata, verbosity=0):
                 verbosity,
             )
         with chdir(tmp_dir):
-            subp(["tar", "czvf", tarfile, log_dir.replace(tmp_dir + "/", "")])
+            subp(["tar", "czvf", tarfile, log_dir.replace(f"{tmp_dir}/", "")])
     sys.stderr.write("Wrote %s\n" % tarfile)
     return 0
 

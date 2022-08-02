@@ -44,10 +44,7 @@ def handle(_name, cfg, cloud, log, args):
     # import for "user: XXXXX"
     if len(args) != 0:
         user = args[0]
-        ids = []
-        if len(args) > 1:
-            ids = args[1:]
-
+        ids = args[1:] if len(args) > 1 else []
         import_ssh_ids(ids, user, log)
         return
 

@@ -19,7 +19,7 @@ def _unquote(value):
 
 
 def get_rc_config_value(key, fn="/etc/rc.conf"):
-    key_prefix = "{}=".format(key)
+    key_prefix = f"{key}="
     for line in util.load_file(fn).splitlines():
         if line.startswith(key_prefix):
             value = line.replace(key_prefix, "")

@@ -131,9 +131,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
     def _find_tz_file(self, tz):
         tz_file = os.path.join(self.tz_zone_dir, str(tz))
         if not os.path.isfile(tz_file):
-            raise IOError(
-                "Invalid timezone %s, no file found at %s" % (tz, tz_file)
-            )
+            raise IOError(f"Invalid timezone {tz}, no file found at {tz_file}")
         return tz_file
 
     def get_option(self, opt_name, default=None):
@@ -161,9 +159,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
 
     def get_primary_arch(self):
         arch = os.uname()[4]
-        if arch in ("i386", "i486", "i586", "i686"):
-            return "i386"
-        return arch
+        return "i386" if arch in ("i386", "i486", "i586", "i686") else arch
 
     def _get_arch_package_mirror_info(self, arch=None):
         mirror_info = self.get_option("package_mirrors", [])
@@ -190,9 +186,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
         dev_names = self._write_network(settings)
         # pylint: enable=assignment-from-no-return
         # Now try to bring them up
-        if bring_up:
-            return self._bring_up_interfaces(dev_names)
-        return False
+        return self._bring_up_interfaces(dev_names) if bring_up else False
 
     def _apply_network_from_network_config(self, netconfig, bring_up=True):
         """Deprecated. Remove if/when arch and gentoo support renderers."""
@@ -204,10 +198,11 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
         )
         header = "\n".join(
             [
-                "# Converted from network_config for distro %s" % distro,
+                f"# Converted from network_config for distro {distro}",
                 "# Implementation of _write_network_config is needed.",
             ]
         )
+
         ns = network_state.parse_net_config_data(netconfig)
         contents = eni.network_state_to_eni(
             ns, header=header, render_hwaddress=True
@@ -309,18 +304,14 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
             and fqdn
         ):
             return fqdn
-        if not hostname:
-            return fqdn
-        return hostname
+        return hostname or fqdn
 
     @staticmethod
     def expand_osfamily(family_list):
         distros = []
         for family in family_list:
             if family not in OSFAMILIES:
-                raise ValueError(
-                    "No distributions found for osfamily {}".format(family)
-                )
+                raise ValueError(f"No distributions found for osfamily {family}")
             distros.extend(OSFAMILIES[family])
         return distros
 
@@ -369,7 +360,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
         # Remove duplicates (incase the previous config filename)
         # is the same as the system config filename, don't bother
         # doing it twice
-        update_files = set([f for f in update_files if f])
+        update_files = {f for f in update_files if f}
         LOG.debug(
             "Attempting to update hostname to %s in %s files",
             hostname,
@@ -399,11 +390,10 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
         local_ip = self._get_localhost_ip()
         prev_info = eh.get_entry(local_ip)
         need_change = False
+        need_change = True
         if not prev_info:
             eh.add_entry(local_ip, fqdn, hostname)
-            need_change = True
         else:
-            need_change = True
             for entry in prev_info:
                 entry_fqdn = None
                 entry_aliases = []
@@ -411,10 +401,13 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
                     entry_fqdn = entry[0]
                 if len(entry) >= 2:
                     entry_aliases = entry[1:]
-                if entry_fqdn is not None and entry_fqdn == fqdn:
-                    if hostname in entry_aliases:
-                        # Exists already, leave it be
-                        need_change = False
+                if (
+                    entry_fqdn is not None
+                    and entry_fqdn == fqdn
+                    and hostname in entry_aliases
+                ):
+                    # Exists already, leave it be
+                    need_change = False
             if need_change:
                 # Doesn't exist, add that entry in...
                 new_entries = list(prev_info)
@@ -446,13 +439,8 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
 
     def _bring_up_interfaces(self, device_names):
         """Deprecated. Remove if/when arch and gentoo support renderers."""
-        am_failed = 0
-        for d in device_names:
-            if not self._bring_up_interface(d):
-                am_failed += 1
-        if am_failed == 0:
-            return True
-        return False
+        am_failed = sum(not self._bring_up_interface(d) for d in device_names)
+        return am_failed == 0
 
     def get_default_user(self):
         return self.get_option("default_user")
@@ -520,8 +508,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
             # that can go right through to the command.
             kwargs["groups"] = ",".join(groups)
 
-            primary_group = kwargs.get("primary_group")
-            if primary_group:
+            if primary_group := kwargs.get("primary_group"):
                 groups.append(primary_group)
 
         if create_groups and groups:
@@ -529,7 +516,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
                 if not util.is_group(group):
                     self.create_group(group)
                     LOG.debug("created group '%s' for user '%s'", group, name)
-        if "uid" in kwargs.keys():
+        if "uid" in kwargs:
             kwargs["uid"] = str(kwargs["uid"])
 
         # Check the values and create the command
@@ -657,21 +644,20 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
                     keys = set(keys) or []
             ssh_util.setup_user_keys(set(keys), name)
         if "ssh_redirect_user" in kwargs:
-            cloud_keys = kwargs.get("cloud_public_ssh_keys", [])
-            if not cloud_keys:
-                LOG.warning(
-                    "Unable to disable SSH logins for %s given"
-                    " ssh_redirect_user: %s. No cloud public-keys present.",
-                    name,
-                    kwargs["ssh_redirect_user"],
-                )
-            else:
+            if cloud_keys := kwargs.get("cloud_public_ssh_keys", []):
                 redirect_user = kwargs["ssh_redirect_user"]
                 disable_option = ssh_util.DISABLE_USER_OPTS
                 disable_option = disable_option.replace("$USER", redirect_user)
                 disable_option = disable_option.replace("$DISABLE_USER", name)
                 ssh_util.setup_user_keys(
                     set(cloud_keys), name, options=disable_option
+                )
+            else:
+                LOG.warning(
+                    "Unable to disable SSH logins for %s given"
+                    " ssh_redirect_user: %s. No cloud public-keys present.",
+                    name,
+                    kwargs["ssh_redirect_user"],
                 )
         return True
 
@@ -702,7 +688,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
             raise e
 
     def set_passwd(self, user, passwd, hashed=False):
-        pass_string = "%s:%s" % (user, passwd)
+        pass_string = f"{user}:{passwd}"
         cmd = ["chpasswd"]
 
         if hashed:
@@ -712,7 +698,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
             cmd.append("-e")
 
         try:
-            subp.subp(cmd, pass_string, logstring="chpasswd for %s" % user)
+            subp.subp(cmd, pass_string, logstring=f"chpasswd for {user}")
         except Exception as e:
             util.logexc(LOG, "Failed to set password for %s", user)
             raise e
@@ -733,7 +719,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
             include_match = re.search(r"^[#|@]includedir\s+(.*)$", line)
             if not include_match:
                 continue
-            included_dir = include_match.group(1).strip()
+            included_dir = include_match[1].strip()
             if not included_dir:
                 continue
             included_dir = os.path.abspath(included_dir)
@@ -748,18 +734,14 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
                         ' on "#include" directives:',
                         "",
                         util.make_header(base="added"),
-                        "#includedir %s" % (path),
+                        f"#includedir {path}",
                         "",
                     ]
+
                     sudoers_contents = "\n".join(lines)
                     util.write_file(sudo_base, sudoers_contents, 0o440)
                 else:
-                    lines = [
-                        "",
-                        util.make_header(base="added"),
-                        "#includedir %s" % (path),
-                        "",
-                    ]
+                    lines = ["", util.make_header(base="added"), f"#includedir {path}", ""]
                     sudoers_contents = "\n".join(lines)
                     util.append_file(sudo_base, sudoers_contents)
                 LOG.debug("Added '#includedir %s' to %s", path, sudo_base)
@@ -772,21 +754,15 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
         if not sudo_file:
             sudo_file = self.ci_sudoers_fn
 
-        lines = [
-            "",
-            "# User rules for %s" % user,
-        ]
+        lines = ["", f"# User rules for {user}"]
         if isinstance(rules, (list, tuple)):
-            for rule in rules:
-                lines.append("%s %s" % (user, rule))
+            lines.extend(f"{user} {rule}" for rule in rules)
         elif isinstance(rules, str):
-            lines.append("%s %s" % (user, rules))
+            lines.append(f"{user} {rules}")
         else:
             msg = "Can not create sudoers rule addition with type %r"
             raise TypeError(msg % (type_utils.obj_name(rules)))
-        content = "\n".join(lines)
-        content += "\n"  # trailing newline
-
+        content = "\n".join(lines) + "\n"
         self.ensure_sudo_dir(os.path.dirname(sudo_file))
         if not os.path.exists(sudo_file):
             contents = [
@@ -938,7 +914,7 @@ def _apply_hostname_transformations_to_url(url: str, transformations: list):
 
     new_netloc = new_hostname
     if parts.port is not None:
-        new_netloc = "{}:{}".format(new_netloc, parts.port)
+        new_netloc = f"{new_netloc}:{parts.port}"
     return urllib.parse.urlunsplit(parts._replace(netloc=new_netloc))
 
 
@@ -980,7 +956,7 @@ def _sanitize_mirror_url(url: str):
         necessary, or ``None`` if the generated string is not a parseable URL.
     """
     # Acceptable characters are LDH characters, plus "." to separate each label
-    acceptable_chars = LDH_ASCII_CHARS + "."
+    acceptable_chars = f"{LDH_ASCII_CHARS}."
     transformations = [
         # This is an IP address, not a hostname, so no need to apply the
         # transformations
@@ -1017,20 +993,17 @@ def _get_package_mirror_info(
         # ec2 availability zones are named cc-direction-[0-9][a-d] (us-east-1b)
         # the region is us-east-1. so region = az[0:-1]
         if _EC2_AZ_RE.match(data_source.availability_zone):
-            ec2_region = data_source.availability_zone[0:-1]
+            ec2_region = data_source.availability_zone[:-1]
 
-            if ALLOW_EC2_MIRRORS_ON_NON_AWS_INSTANCE_TYPES:
-                subst["ec2_region"] = "%s" % ec2_region
-            elif data_source.platform_type == "ec2":
-                subst["ec2_region"] = "%s" % ec2_region
-
+            if (
+                ALLOW_EC2_MIRRORS_ON_NON_AWS_INSTANCE_TYPES
+                or data_source.platform_type == "ec2"
+            ):
+                subst["ec2_region"] = f"{ec2_region}"
     if data_source and data_source.region:
         subst["region"] = data_source.region
 
-    results = {}
-    for (name, mirror) in mirror_info.get("failsafe", {}).items():
-        results[name] = mirror
-
+    results = dict(mirror_info.get("failsafe", {}).items())
     for (name, searchlist) in mirror_info.get("search", {}).items():
         mirrors = []
         for tmpl in searchlist:
@@ -1043,8 +1016,7 @@ def _get_package_mirror_info(
             if mirror is not None:
                 mirrors.append(mirror)
 
-        found = mirror_filter(mirrors)
-        if found:
+        if found := mirror_filter(mirrors):
             results[name] = found
 
     LOG.debug("filtered distro mirror info: %s", results)
@@ -1068,12 +1040,11 @@ def fetch(name):
     locs, looked_locs = importer.find_module(name, ["", __name__], ["Distro"])
     if not locs:
         raise ImportError(
-            "No distribution found for distro %s (searched %s)"
-            % (name, looked_locs)
+            f"No distribution found for distro {name} (searched {looked_locs})"
         )
+
     mod = importer.import_module(locs[0])
-    cls = getattr(mod, "Distro")
-    return cls
+    return getattr(mod, "Distro")
 
 
 def set_etc_timezone(

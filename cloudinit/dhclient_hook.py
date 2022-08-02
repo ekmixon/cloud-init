@@ -42,7 +42,7 @@ def run_hook(interface, event, data_d=None, env=None):
         data_d = _get_hooks_dir()
     if env is None:
         env = os.environ
-    hook_file = os.path.join(data_d, interface + ".json")
+    hook_file = os.path.join(data_d, f"{interface}.json")
 
     if event == UP:
         if not os.path.exists(data_d):
@@ -80,10 +80,9 @@ if __name__ == "__main__":
 
     parser = get_parser()
     args = parser.parse_args(args=sys.argv[1:])
-    return_value = handle_args(
+    if return_value := handle_args(
         NAME, args, data_d=os.environ.get("_CI_DHCP_HOOK_DATA_D")
-    )
-    if return_value:
+    ):
         sys.exit(return_value)
 
 

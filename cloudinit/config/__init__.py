@@ -21,12 +21,12 @@ MOD_PREFIX = "cc_"
 def form_module_name(name):
     canon_name = name.replace("-", "_")
     if canon_name.lower().endswith(".py"):
-        canon_name = canon_name[0 : (len(canon_name) - 3)]
+        canon_name = canon_name[:len(canon_name) - 3]
     canon_name = canon_name.strip()
     if not canon_name:
         return None
     if not canon_name.startswith(MOD_PREFIX):
-        canon_name = "%s%s" % (MOD_PREFIX, canon_name)
+        canon_name = f"{MOD_PREFIX}{canon_name}"
     return canon_name
 
 

@@ -44,7 +44,7 @@ class UpstartJobPartHandler(handlers.Handler):
             ext = ""
         ext = ext.lower()
         if ext != ".conf":
-            filename = filename + ".conf"
+            filename = f"{filename}.conf"
 
         payload = util.dos2unix(payload)
         path = os.path.join(self.upstart_dir, filename)
@@ -89,9 +89,7 @@ def _has_suitable_upstart():
             subp.subp(["dpkg", "--compare-versions", dpkg_ver, "ge", good])
             return True
         except subp.ProcessExecutionError as e:
-            if e.exit_code == 1:
-                pass
-            else:
+            if e.exit_code != 1:
                 util.logexc(
                     LOG, "dpkg --compare-versions failed [%s]", e.exit_code
                 )

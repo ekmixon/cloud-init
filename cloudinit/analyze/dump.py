@@ -35,9 +35,7 @@ def parse_timestamp(timestampstr):
         FMT = DEFAULT_FMT
         if "." in timestampstr:
             FMT = CLOUD_INIT_JOURNALCTL_FMT
-        dt = datetime.strptime(
-            timestampstr + " " + str(datetime.now().year), FMT
-        )
+        dt = datetime.strptime(f"{timestampstr} {str(datetime.now().year)}", FMT)
         timestamp = dt.strftime("%s.%f")
     elif "," in timestampstr:
         # 2016-09-12 14:39:20,839
@@ -93,11 +91,11 @@ def parse_ci_logline(line):
 
     # journalctl -o short-precise
     if timehost.endswith(":"):
-        timehost = " ".join(timehost.split()[0:-1])
+        timehost = " ".join(timehost.split()[:-1])
 
     if "," in timehost:
         timestampstr, extra = timehost.split(",")
-        timestampstr += ",%s" % extra.split()[0]
+        timestampstr += f",{extra.split()[0]}"
         if " " in extra:
             hostname = extra.split()[-1]
     else:
@@ -112,18 +110,17 @@ def parse_ci_logline(line):
             timestampstr = timehost.split(hostname)[0].strip()
     if "Cloud-init v." in eventstr:
         event_type = "start"
-        if "running" in eventstr:
-            stage_and_timestamp = eventstr.split("running")[1].lstrip()
-            event_name, _ = stage_and_timestamp.split(" at ")
-            event_name = event_name.replace("'", "").replace(":", "-")
-            if event_name == "init":
-                event_name = "init-network"
-        else:
+        if "running" not in eventstr:
             # don't generate a start for the 'finished at' banner
             return None
+        stage_and_timestamp = eventstr.split("running")[1].lstrip()
+        event_name, _ = stage_and_timestamp.split(" at ")
+        event_name = event_name.replace("'", "").replace(":", "-")
+        if event_name == "init":
+            event_name = "init-network"
         event_description = stage_to_description[event_name]
     else:
-        (_pymodloglvl, event_type, event_name) = eventstr.split()[0:3]
+        (_pymodloglvl, event_type, event_name) = eventstr.split()[:3]
         event_description = eventstr.split(event_name)[1].strip()
 
     event = {
@@ -150,11 +147,7 @@ def dump_events(cisource=None, rawdata=None):
     if not any([cisource, rawdata]):
         raise ValueError("Either cisource or rawdata parameters are required")
 
-    if rawdata:
-        data = rawdata.splitlines()
-    else:
-        data = cisource.readlines()
-
+    data = rawdata.splitlines() if rawdata else cisource.readlines()
     for line in data:
         for match in CI_EVENT_MATCHES:
             if match in line:
@@ -169,11 +162,7 @@ def dump_events(cisource=None, rawdata=None):
 
 
 def main():
-    if len(sys.argv) > 1:
-        cisource = open(sys.argv[1])
-    else:
-        cisource = sys.stdin
-
+    cisource = open(sys.argv[1]) if len(sys.argv) > 1 else sys.stdin
     return util.json_dumps(dump_events(cisource))
 
 

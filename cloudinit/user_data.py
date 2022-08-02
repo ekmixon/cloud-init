@@ -174,10 +174,7 @@ class UserDataProcessor(object):
         payload_idx = None
         if msg.get_content_type() in EXAMINE_FOR_LAUNCH_INDEX:
             try:
-                # See if it has a launch-index field
-                # that might affect the final header
-                payload = util.load_yaml(msg.get_payload(decode=True))
-                if payload:
+                if payload := util.load_yaml(msg.get_payload(decode=True)):
                     payload_idx = payload.get("launch-index")
             except Exception:
                 pass
@@ -249,12 +246,8 @@ class UserDataProcessor(object):
                     if resp.ok():
                         content = resp.contents
                     else:
-                        error_message = (
-                            "Fetching from {} resulted in"
-                            " a invalid http code of {}".format(
-                                include_url, resp.code
-                            )
-                        )
+                        error_message = f"Fetching from {include_url} resulted in a invalid http code of {resp.code}"
+
                         _handle_error(error_message)
                 except UrlError as urle:
                     message = str(urle)
@@ -264,9 +257,7 @@ class UserDataProcessor(object):
                         message += " for url: {0}".format(include_url)
                     _handle_error(message, urle)
                 except IOError as ioe:
-                    error_message = "Fetching from {} resulted in {}".format(
-                        include_url, ioe
-                    )
+                    error_message = f"Fetching from {include_url} resulted in {ioe}"
                     _handle_error(error_message, ioe)
 
             if content is not None:
@@ -358,9 +349,7 @@ class UserDataProcessor(object):
 def is_skippable(part):
     # multipart/* are just containers
     part_maintype = part.get_content_maintype() or ""
-    if part_maintype.lower() == "multipart":
-        return True
-    return False
+    return part_maintype.lower() == "multipart"
 
 
 # Coverts a raw string into a mime message
@@ -376,12 +365,9 @@ def convert_string(raw_data, content_type=NOT_MULTIPART_TYPE):
         msg.set_payload(data)
         return msg
 
-    if isinstance(raw_data, str):
-        bdata = raw_data.encode("utf-8")
-    else:
-        bdata = raw_data
+    bdata = raw_data.encode("utf-8") if isinstance(raw_data, str) else raw_data
     bdata = util.decomp_gzip(bdata, decode=False)
-    if b"mime-version:" in bdata[0:4096].lower():
+    if b"mime-version:" in bdata[:4096].lower():
         msg = util.message_from_string(bdata.decode("utf-8"))
     else:
         msg = create_binmsg(bdata, content_type)

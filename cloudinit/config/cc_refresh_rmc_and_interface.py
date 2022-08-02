@@ -96,7 +96,7 @@ def refresh_ipv6(interface):
 
 
 def sysconfig_path(iface):
-    return "/etc/sysconfig/network-scripts/ifcfg-" + iface
+    return f"/etc/sysconfig/network-scripts/ifcfg-{iface}"
 
 
 def restart_network_manager():

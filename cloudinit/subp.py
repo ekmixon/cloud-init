@@ -36,7 +36,7 @@ def prepend_base_command(base_command, commands):
             elif command[0] != base_command:  # Automatically prepend
                 command.insert(0, base_command)
         elif isinstance(command, str):
-            if not command.startswith("%s " % base_command):
+            if not command.startswith(f"{base_command} "):
                 warnings.append(command)
         else:
             errors.append(str(command))
@@ -82,45 +82,26 @@ class ProcessExecutionError(IOError):
         reason=None,
         errno=None,
     ):
-        if not cmd:
-            self.cmd = self.empty_attr
-        else:
-            self.cmd = cmd
-
-        if not description:
-            if not exit_code and errno == ENOEXEC:
-                self.description = "Exec format error. Missing #! in script?"
-            else:
-                self.description = "Unexpected error while running command."
-        else:
+        self.cmd = cmd or self.empty_attr
+        if description:
             self.description = description
 
-        if not isinstance(exit_code, int):
-            self.exit_code = self.empty_attr
+        elif not exit_code and errno == ENOEXEC:
+            self.description = "Exec format error. Missing #! in script?"
         else:
-            self.exit_code = exit_code
-
+            self.description = "Unexpected error while running command."
+        self.exit_code = exit_code if isinstance(exit_code, int) else self.empty_attr
         if not stderr:
-            if stderr is None:
-                self.stderr = self.empty_attr
-            else:
-                self.stderr = stderr
+            self.stderr = self.empty_attr if stderr is None else stderr
         else:
             self.stderr = self._indent_text(stderr)
 
         if not stdout:
-            if stdout is None:
-                self.stdout = self.empty_attr
-            else:
-                self.stdout = stdout
+            self.stdout = self.empty_attr if stdout is None else stdout
         else:
             self.stdout = self._indent_text(stdout)
 
-        if reason:
-            self.reason = reason
-        else:
-            self.reason = self.empty_attr
-
+        self.reason = reason or self.empty_attr
         self.errno = errno
         message = self.MESSAGE_TMPL % {
             "description": self._ensure_string(self.description),
@@ -318,9 +299,7 @@ def subp(
     if decode:
 
         def ldecode(data, m="utf-8"):
-            if not isinstance(data, bytes):
-                return data
-            return data.decode(m, decode)
+            return data.decode(m, decode) if isinstance(data, bytes) else data
 
         out = ldecode(out)
         err = ldecode(err)
@@ -342,7 +321,7 @@ def target_path(target, path=None):
     if target in (None, ""):
         target = "/"
     elif not isinstance(target, str):
-        raise ValueError("Unexpected input for target: %s" % target)
+        raise ValueError(f"Unexpected input for target: {target}")
     else:
         target = os.path.abspath(target)
         # abspath("//") returns "//" specifically for 2 slashes.
@@ -362,22 +341,14 @@ def target_path(target, path=None):
 def which(program, search=None, target=None):
     target = target_path(target)
 
-    if os.path.sep in program:
-        # if program had a '/' in it, then do not search PATH
-        # 'which' does consider cwd here. (cd / && which bin/ls) = bin/ls
-        # so effectively we set cwd to / (or target)
-        if is_exe(target_path(target, program)):
-            return program
+    if os.path.sep in program and is_exe(target_path(target, program)):
+        return program
 
     if search is None:
         paths = [
             p.strip('"') for p in os.environ.get("PATH", "").split(os.pathsep)
         ]
-        if target == "/":
-            search = paths
-        else:
-            search = [p for p in paths if p.startswith("/")]
-
+        search = paths if target == "/" else [p for p in paths if p.startswith("/")]
     # normalize path input
     search = [os.path.abspath(p) for p in search]
 
@@ -422,8 +393,7 @@ def runparts(dirp, skip_no_exist=True, exe_prefix=None):
 
     if failed and attempted:
         raise RuntimeError(
-            "Runparts: %s failures (%s) in %s attempted commands"
-            % (len(failed), ",".join(failed), len(attempted))
+            f'Runparts: {len(failed)} failures ({",".join(failed)}) in {len(attempted)} attempted commands'
         )
 
 

@@ -39,10 +39,7 @@ def _tempfile_dir_arg(odir=None, needs_exe=False):
     if _TMPDIR:
         return _TMPDIR
 
-    if os.getuid() == 0:
-        tdir = _ROOT_TMPDIR
-    else:
-        tdir = os.environ.get("TMPDIR", "/tmp")
+    tdir = _ROOT_TMPDIR if os.getuid() == 0 else os.environ.get("TMPDIR", "/tmp")
     if not os.path.isdir(tdir):
         os.makedirs(tdir)
         os.chmod(tdir, 0o1777)

@@ -23,9 +23,7 @@ class MetadataLeafDecoder(object):
         if not text:
             return False
         text = text.strip()
-        if text.startswith("{") and text.endswith("}"):
-            return True
-        return False
+        return bool(text.startswith("{") and text.endswith("}"))
 
     def __call__(self, field, blob):
         if not blob:
@@ -44,9 +42,7 @@ class MetadataLeafDecoder(object):
                     field,
                     e,
                 )
-        if blob.find("\n") != -1:
-            return blob.splitlines()
-        return blob
+        return blob.splitlines() if blob.find("\n") != -1 else blob
 
 
 # See: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/
@@ -71,15 +67,10 @@ class MetadataMaterializer(object):
             return (leaves, children)
 
         def has_children(item):
-            if item.endswith("/"):
-                return True
-            else:
-                return False
+            return bool(item.endswith("/"))
 
         def get_name(item):
-            if item.endswith("/"):
-                return item.rstrip("/")
-            return item
+            return item.rstrip("/") if item.endswith("/") else item
 
         for field in blob.splitlines():
             field = field.strip()
@@ -100,7 +91,7 @@ class MetadataMaterializer(object):
                     (ident, sub_contents) = contents
                     ident = util.safe_int(ident)
                     if ident is not None:
-                        resource = "%s/openssh-key" % (ident)
+                        resource = f"{ident}/openssh-key"
                         field_name = sub_contents
                 leaves[field_name] = resource
         return (leaves, children)
@@ -125,9 +116,8 @@ class MetadataMaterializer(object):
             leaf_url = url_helper.combine_url(base_url, resource)
             leaf_blob = self._caller(leaf_url)
             leaf_contents[field] = self._leaf_decoder(field, leaf_blob)
-        joined = {}
-        joined.update(child_contents)
-        for field in leaf_contents.keys():
+        joined = {} | child_contents
+        for field in leaf_contents:
             if field in joined:
                 LOG.warning("Duplicate key found in results from %s", base_url)
             else:

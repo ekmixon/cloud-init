@@ -91,8 +91,9 @@ def handle_args(name, args):
             payload=user_data,
             payload_fn=args.user_data,
             instance_data_file=instance_data_fn,
-            debug=True if args.debug else False,
+            debug=bool(args.debug),
         )
+
     except RuntimeError as e:
         LOG.error("Cannot render from instance data: %s", str(e))
         return 1

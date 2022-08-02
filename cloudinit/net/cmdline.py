@@ -57,8 +57,7 @@ class KlibcNetworkConfigSource(InitramfsNetworkConfigSource):
         if self._mac_addrs is None:
             self._mac_addrs = {}
             for k in get_devicelist():
-                mac_addr = read_sys_net_safe(k, "address")
-                if mac_addr:
+                if mac_addr := read_sys_net_safe(k, "address"):
                     self._mac_addrs[k] = mac_addr
 
     def is_applicable(self) -> bool:
@@ -121,13 +120,9 @@ def _klibc_to_config_entry(content, mac_addrs=None):
     # IPv6 config gives us IPV6PROTO, not PROTO.
     proto = data.get("PROTO", data.get("IPV6PROTO"))
     if not proto:
-        if data.get("filename"):
-            proto = "dhcp"
-        else:
-            proto = "none"
-
+        proto = "dhcp" if data.get("filename") else "none"
     if proto not in ("none", "dhcp", "dhcp6"):
-        raise ValueError("Unexpected value for PROTO: %s" % proto)
+        raise ValueError(f"Unexpected value for PROTO: {proto}")
 
     iface = {
         "type": "physical",
@@ -141,11 +136,11 @@ def _klibc_to_config_entry(content, mac_addrs=None):
     # Handle both IPv4 and IPv6 values
     for pre in ("IPV4", "IPV6"):
         # if no IPV4ADDR or IPV6ADDR, then go on.
-        if pre + "ADDR" not in data:
+        if f"{pre}ADDR" not in data:
             continue
 
         # PROTO for ipv4, IPV6PROTO for ipv6
-        cur_proto = data.get(pre + "PROTO", proto)
+        cur_proto = data.get(f"{pre}PROTO", proto)
         # ipconfig's 'none' is called 'static'
         if cur_proto == "none":
             cur_proto = "static"
@@ -154,7 +149,7 @@ def _klibc_to_config_entry(content, mac_addrs=None):
         # only populate address for static types. While the rendered config
         # may have an address for dhcp, that is not really expected.
         if cur_proto == "static":
-            subnet["address"] = data[pre + "ADDR"]
+            subnet["address"] = data[f"{pre}ADDR"]
 
         # these fields go right on the subnet
         for key in ("NETMASK", "BROADCAST", "GATEWAY"):
@@ -170,14 +165,8 @@ def _klibc_to_config_entry(content, mac_addrs=None):
                 dns.append(data[pre + nskey])
         if dns:
             subnet["dns_nameservers"] = dns
-            # add search to both ipv4 and ipv6, as it has no namespace
-            search = data.get("DOMAINSEARCH")
-            if search:
-                if "," in search:
-                    subnet["dns_search"] = search.split(",")
-                else:
-                    subnet["dns_search"] = search.split()
-
+            if search := data.get("DOMAINSEARCH"):
+                subnet["dns_search"] = search.split(",") if "," in search else search.split()
         iface["subnets"].append(subnet)
 
     return name, iface

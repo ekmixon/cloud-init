@@ -62,9 +62,12 @@ def do_register(
             profile_name,
             server,
         )
-    cmd = ["rhnreg_ks"]
-    cmd.extend(["--serverUrl", "https://%s/XMLRPC" % server])
-    cmd.extend(["--profilename", str(profile_name)])
+    cmd = [
+        "rhnreg_ks",
+        *["--serverUrl", f"https://{server}/XMLRPC"],
+        *["--profilename", str(profile_name)],
+    ]
+
     if proxy:
         cmd.extend(["--proxy", str(proxy)])
     if ca_cert_path:
@@ -82,8 +85,7 @@ def handle(name, cfg, cloud, log, _args):
         )
         return
     cfg = cfg["spacewalk"]
-    spacewalk_server = cfg.get("server")
-    if spacewalk_server:
+    if spacewalk_server := cfg.get("server"):
         # Need to have this installed before further things will work.
         cloud.distro.install_packages(required_packages)
         if not is_registered():
